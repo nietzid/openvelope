@@ -6,12 +6,15 @@ import MessageView from '../components/MessageView'
 import ComposePanel, { type ComposePanelHandle } from '../components/ComposePanel'
 import { useAuthStore } from '../stores/authStore'
 import { logout as logoutRequest } from '../services/auth'
+import { useMailboxUpdates } from '../hooks/useMailboxUpdates'
 
 function Mailbox() {
   const navigate = useNavigate()
   const email = useAuthStore((state) => state.email)
   const clearAuth = useAuthStore((state) => state.clearAuth)
   const composeRef = useRef<ComposePanelHandle>(null)
+
+  useMailboxUpdates()
 
   const handleLogout = async () => {
     try {
