@@ -1,7 +1,9 @@
+import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import MessageList from '../components/MessageList'
 import MessageView from '../components/MessageView'
+import ComposePanel, { type ComposePanelHandle } from '../components/ComposePanel'
 import { useAuthStore } from '../stores/authStore'
 import { logout as logoutRequest } from '../services/auth'
 
@@ -9,6 +11,7 @@ function Mailbox() {
   const navigate = useNavigate()
   const email = useAuthStore((state) => state.email)
   const clearAuth = useAuthStore((state) => state.clearAuth)
+  const composeRef = useRef<ComposePanelHandle>(null)
 
   const handleLogout = async () => {
     try {
@@ -33,10 +36,11 @@ function Mailbox() {
         </button>
       </header>
       <div className="flex flex-1 min-h-0">
-        <Sidebar />
+        <Sidebar onCompose={() => composeRef.current?.open()} />
         <MessageList />
         <MessageView />
       </div>
+      <ComposePanel ref={composeRef} />
     </div>
   )
 }

@@ -11,6 +11,11 @@
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.2",
+    "@tiptap/extension-link": "^3.24.0",
+    "@tiptap/extension-underline": "^3.24.0",
+    "@tiptap/pm": "^3.24.0",
+    "@tiptap/react": "^3.24.0",
+    "@tiptap/starter-kit": "^3.24.0",
     "axios": "^1.16.1",
     "postal-mime": "^2.7.4",
     "react": "^19.2.6",

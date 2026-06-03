@@ -2,7 +2,11 @@ import { useEffect } from 'react'
 import { listFolders } from '../services/folders'
 import { useMailboxStore } from '../stores/mailboxStore'
 
-function Sidebar() {
+interface SidebarProps {
+  onCompose: () => void
+}
+
+function Sidebar({ onCompose }: SidebarProps) {
   const folders = useMailboxStore((state) => state.folders)
   const currentFolder = useMailboxStore((state) => state.currentFolder)
   const setFolders = useMailboxStore((state) => state.setFolders)
@@ -21,6 +25,7 @@ function Sidebar() {
       <div className="p-4">
         <button
           type="button"
+          onClick={onCompose}
           className="w-full bg-black text-white py-2 px-4 font-medium hover:bg-gray-800 cursor-pointer"
         >
           Compose
