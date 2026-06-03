@@ -385,3 +385,113 @@ func formatAddresses(addrs []*goimap.Address) string {
 	}
 	return result
 }
+
+// SearchMessages searches a folder with the given criteria and returns
+// summaries of matching messages.
+func SearchMessages(conn *UserConnection, folder string, query SearchQuery) ([]MessageSummary, error) {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if _, err := conn.Client.Select(folder, true); err != nil {
+		return nil, fmt.Errorf("select folder %q: %w", folder, err)
+	}
+
+	criteria := goimap.NewSearchCriteria()
+
+	if query.Text != "" {
+		criteria.Text = []string{query.Text}
+	}
+	if query.From != "" {
+		criteria.Header.Set("From", query.From)
+	}
+	if query.To != "" {
+		criteria.Header.Set("To", query.To)
+	}
+	if query.Subject != "" {
+		criteria.Header.Set("Subject", query.Subject)
+	}
+	if query.Since != nil {
+		criteria.Since = *query.Since
+	}
+	if query.Before != nil {
+		criteria.Before = *query.Before
+	}
+	if query.Unseen != nil {
+		if *query.Unseen {
+			criteria.WithoutFlags = []string{`\Seen`}
+		} else {
+			criteria.WithFlags = []string{`\Seen`}
+		}
+	}
+	if query.Flagged != nil {
+		if *query.Flagged {
+			criteria.WithFlags = append(criteria.WithFlags, `\Flagged`)
+		} else {
+			criteria.WithoutFlags = append(criteria.WithoutFlags, `\Flagged`)
+		}
+	}
+
+	uids, err := conn.Client.UidSearch(criteria)
+	if err != nil {
+		return nil, fmt.Errorf("search: %w", err)
+	}
+
+	if len(uids) == 0 {
+		return []MessageSummary{}, nil
+	}
+
+	// Sort descending
+	for i, j := 0, len(uids)-1; i < j; i, j = i+1, j-1 {
+		uids[i], uids[j] = uids[j], uids[i]
+	}
+
+	seq := new(goimap.SeqSet)
+	for _, uid := range uids {
+		seq.AddNum(uid)
+	}
+
+	items := []goimap.FetchItem{
+		goimap.FetchUid,
+		goimap.FetchEnvelope,
+		goimap.FetchFlags,
+		goimap.FetchRFC822Size,
+		goimap.FetchInternalDate,
+	}
+
+	ch := make(chan *goimap.Message, 10)
+	done := make(chan error, 1)
+	go func() {
+		done <- conn.Client.UidFetch(seq, items, ch)
+	}()
+
+	var summaries []MessageSummary
+	for msg := range ch {
+		s := MessageSummary{
+			UID:  msg.Uid,
+			Size: msg.Size,
+		}
+		if msg.Envelope != nil {
+			if msg.Envelope.From != nil && len(msg.Envelope.From) > 0 {
+				s.From = formatAddress(msg.Envelope.From[0])
+			}
+			if msg.Envelope.To != nil && len(msg.Envelope.To) > 0 {
+				s.To = formatAddresses(msg.Envelope.To)
+			}
+			s.Subject = msg.Envelope.Subject
+			s.Date = msg.Envelope.Date
+		}
+		if msg.Flags != nil {
+			s.Flags = ParseMessageFlags(msg.Flags)
+		}
+		if !msg.InternalDate.IsZero() {
+			s.Date = msg.InternalDate
+		}
+		summaries = append(summaries, s)
+	}
+
+	if err := <-done; err != nil {
+		return nil, fmt.Errorf("fetch: %w", err)
+	}
+
+	return summaries, nil
+}

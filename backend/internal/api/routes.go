@@ -6,7 +6,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func RegisterRoutes(app *fiber.App, cfg *config.Config, auth *AuthHandler, folders *FolderHandler, messages *MessageHandler) {
+func RegisterRoutes(app *fiber.App, cfg *config.Config, auth *AuthHandler, folders *FolderHandler, messages *MessageHandler, compose *ComposeHandler, search *SearchHandler) {
 	app.Get("/health", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
@@ -33,4 +33,7 @@ func RegisterRoutes(app *fiber.App, cfg *config.Config, auth *AuthHandler, folde
 	msgGroup.Post("/flags", messages.UpdateFlags)
 	msgGroup.Delete("/:uid", messages.Delete)
 	msgGroup.Post("/move", messages.Move)
+
+	protected.Post("/send", compose.Send)
+	protected.Get("/search", search.Search)
 }
