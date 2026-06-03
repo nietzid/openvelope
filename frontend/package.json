@@ -12,6 +12,7 @@
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.2",
     "axios": "^1.16.1",
+    "postal-mime": "^2.7.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.16.0",
