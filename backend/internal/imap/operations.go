@@ -128,3 +128,33 @@ func SelectFolder(conn *UserConnection, folder string) (*goimap.MailboxStatus, e
 	}
 	return status, nil
 }
+
+func CreateFolder(conn *UserConnection, name string) error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if err := conn.Client.Create(name); err != nil {
+		return fmt.Errorf("create folder %q: %w", name, err)
+	}
+	return nil
+}
+
+func DeleteFolder(conn *UserConnection, name string) error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if err := conn.Client.Delete(name); err != nil {
+		return fmt.Errorf("delete folder %q: %w", name, err)
+	}
+	return nil
+}
+
+func RenameFolder(conn *UserConnection, oldName, newName string) error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if err := conn.Client.Rename(oldName, newName); err != nil {
+		return fmt.Errorf("rename folder %q to %q: %w", oldName, newName, err)
+	}
+	return nil
+}
