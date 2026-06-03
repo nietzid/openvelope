@@ -2,6 +2,7 @@ package imap
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -157,4 +158,230 @@ func RenameFolder(conn *UserConnection, oldName, newName string) error {
 		return fmt.Errorf("rename folder %q to %q: %w", oldName, newName, err)
 	}
 	return nil
+}
+
+// ListMessages fetches a page of message summaries from the given folder.
+// UIDs are sorted in descending order (newest first).
+func ListMessages(conn *UserConnection, folder string, page, pageSize int) ([]MessageSummary, int, error) {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if _, err := conn.Client.Select(folder, true); err != nil {
+		return nil, 0, fmt.Errorf("select folder %q: %w", folder, err)
+	}
+
+	// Get all UIDs
+	seqset, _ := goimap.ParseSeqSet("1:*")
+	uids, err := conn.Client.UidSearch(&goimap.SearchCriteria{SeqNum: seqset})
+	if err != nil {
+		return nil, 0, fmt.Errorf("search uids: %w", err)
+	}
+
+	total := len(uids)
+	if total == 0 {
+		return []MessageSummary{}, 0, nil
+	}
+
+	// Sort descending (newest first)
+	for i, j := 0, len(uids)-1; i < j; i, j = i+1, j-1 {
+		uids[i], uids[j] = uids[j], uids[i]
+	}
+
+	// Paginate
+	start := page * pageSize
+	if start >= total {
+		return []MessageSummary{}, total, nil
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	pageUIDs := uids[start:end]
+
+	// Build seqset for the page
+	pageSeq := new(goimap.SeqSet)
+	for _, uid := range pageUIDs {
+		pageSeq.AddNum(uid)
+	}
+
+	items := []goimap.FetchItem{
+		goimap.FetchUid,
+		goimap.FetchEnvelope,
+		goimap.FetchFlags,
+		goimap.FetchRFC822Size,
+		goimap.FetchInternalDate,
+	}
+
+	ch := make(chan *goimap.Message, 10)
+	done := make(chan error, 1)
+	go func() {
+		done <- conn.Client.UidFetch(pageSeq, items, ch)
+	}()
+
+	var summaries []MessageSummary
+	for msg := range ch {
+		s := MessageSummary{
+			UID:  msg.Uid,
+			Size: msg.Size,
+		}
+		if msg.Envelope != nil {
+			if msg.Envelope.From != nil && len(msg.Envelope.From) > 0 {
+				s.From = formatAddress(msg.Envelope.From[0])
+			}
+			if msg.Envelope.To != nil && len(msg.Envelope.To) > 0 {
+				s.To = formatAddresses(msg.Envelope.To)
+			}
+			s.Subject = msg.Envelope.Subject
+			s.Date = msg.Envelope.Date
+		}
+		if msg.Flags != nil {
+			s.Flags = ParseMessageFlags(msg.Flags)
+		}
+		if !msg.InternalDate.IsZero() {
+			s.Date = msg.InternalDate
+		}
+		summaries = append(summaries, s)
+	}
+
+	if err := <-done; err != nil {
+		return nil, 0, fmt.Errorf("fetch messages: %w", err)
+	}
+
+	return summaries, total, nil
+}
+
+// GetMessage fetches the full RFC822 body of a message by UID.
+func GetMessage(conn *UserConnection, folder string, uid uint32) ([]byte, error) {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if _, err := conn.Client.Select(folder, false); err != nil {
+		return nil, fmt.Errorf("select folder %q: %w", folder, err)
+	}
+
+	seq := new(goimap.SeqSet)
+	seq.AddNum(uid)
+
+	ch := make(chan *goimap.Message, 1)
+	done := make(chan error, 1)
+	go func() {
+		done <- conn.Client.UidFetch(seq, []goimap.FetchItem{goimap.FetchRFC822}, ch)
+	}()
+
+	var literal goimap.Literal
+	for msg := range ch {
+		literal = msg.GetBody(&goimap.BodySectionName{})
+	}
+
+	if err := <-done; err != nil {
+		return nil, fmt.Errorf("fetch message: %w", err)
+	}
+
+	if literal == nil {
+		return nil, fmt.Errorf("message body not found")
+	}
+
+	body, err := io.ReadAll(literal)
+	if err != nil {
+		return nil, fmt.Errorf("read message body: %w", err)
+	}
+
+	return body, nil
+}
+
+// UpdateFlags sets or clears message flags.
+func UpdateFlags(conn *UserConnection, folder string, uids []uint32, flag string, value bool) error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if _, err := conn.Client.Select(folder, false); err != nil {
+		return fmt.Errorf("select folder %q: %w", folder, err)
+	}
+
+	seq := new(goimap.SeqSet)
+	for _, uid := range uids {
+		seq.AddNum(uid)
+	}
+
+	flags := []interface{}{flag}
+	var item goimap.StoreItem
+	if value {
+		item = goimap.AddFlags
+	} else {
+		item = goimap.RemoveFlags
+	}
+
+	if err := conn.Client.UidStore(seq, item, flags, nil); err != nil {
+		return fmt.Errorf("store flags: %w", err)
+	}
+	return nil
+}
+
+// DeleteMessage marks a message as deleted and expunges it.
+func DeleteMessage(conn *UserConnection, folder string, uid uint32) error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if _, err := conn.Client.Select(folder, false); err != nil {
+		return fmt.Errorf("select folder %q: %w", folder, err)
+	}
+
+	seq := new(goimap.SeqSet)
+	seq.AddNum(uid)
+
+	if err := conn.Client.UidStore(seq, goimap.AddFlags, []interface{}{`\Deleted`}, nil); err != nil {
+		return fmt.Errorf("mark deleted: %w", err)
+	}
+
+	if err := conn.Client.Expunge(nil); err != nil {
+		return fmt.Errorf("expunge: %w", err)
+	}
+	return nil
+}
+
+// MoveMessage copies a message to another folder then deletes the original.
+func MoveMessage(conn *UserConnection, folder string, uid uint32, destFolder string) error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if _, err := conn.Client.Select(folder, false); err != nil {
+		return fmt.Errorf("select folder %q: %w", folder, err)
+	}
+
+	seq := new(goimap.SeqSet)
+	seq.AddNum(uid)
+
+	if err := conn.Client.UidCopy(seq, destFolder); err != nil {
+		return fmt.Errorf("copy to %q: %w", destFolder, err)
+	}
+
+	if err := conn.Client.UidStore(seq, goimap.AddFlags, []interface{}{`\Deleted`}, nil); err != nil {
+		return fmt.Errorf("mark deleted: %w", err)
+	}
+
+	if err := conn.Client.Expunge(nil); err != nil {
+		return fmt.Errorf("expunge: %w", err)
+	}
+	return nil
+}
+
+func formatAddress(addr *goimap.Address) string {
+	if addr == nil {
+		return ""
+	}
+	if addr.PersonalName != "" {
+		return fmt.Sprintf("%s <%s@%s>", addr.PersonalName, addr.MailboxName, addr.HostName)
+	}
+	return fmt.Sprintf("%s@%s", addr.MailboxName, addr.HostName)
+}
+
+func formatAddresses(addrs []*goimap.Address) string {
+	if len(addrs) == 0 {
+		return ""
+	}
+	result := formatAddress(addrs[0])
+	for _, a := range addrs[1:] {
+		result += ", " + formatAddress(a)
+	}
+	return result
 }
