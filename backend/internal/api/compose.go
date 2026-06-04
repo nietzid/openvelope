@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/base64"
 	"errors"
+	"io"
 
 	"github.com/arfiansyah/webmail/internal/auth"
 	"github.com/arfiansyah/webmail/internal/config"
@@ -20,15 +22,54 @@ func NewComposeHandler(db *gorm.DB, cfg *config.Config) *ComposeHandler {
 	return &ComposeHandler{db: db, cfg: cfg}
 }
 
+// UploadAttachment handles multipart/form-data file upload for compose.
+func (h *ComposeHandler) UploadAttachment(c fiber.Ctx) error {
+	file, err := c.FormFile("file")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fiber.Map{"code": "BAD_REQUEST", "message": "file is required"},
+		})
+	}
+
+	f, err := file.Open()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "INTERNAL", "message": "failed to open file"},
+		})
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "INTERNAL", "message": "failed to read file"},
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"filename":     file.Filename,
+		"content_type": file.Header.Get("Content-Type"),
+		"content":      base64.StdEncoding.EncodeToString(data),
+		"size":         len(data),
+	})
+}
+
+type attachmentData struct {
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Content     string `json:"content"` // base64 encoded
+}
+
 type sendRequest struct {
-	To         []string `json:"to"`
-	Cc         []string `json:"cc"`
-	Bcc        []string `json:"bcc"`
-	Subject    string   `json:"subject"`
-	Body       string   `json:"body"`
-	IsHTML     bool     `json:"is_html"`
-	InReplyTo  string   `json:"in_reply_to"`
-	References []string `json:"references"`
+	To          []string         `json:"to"`
+	Cc          []string         `json:"cc"`
+	Bcc         []string         `json:"bcc"`
+	Subject     string           `json:"subject"`
+	Body        string           `json:"body"`
+	IsHTML      bool             `json:"is_html"`
+	InReplyTo   string           `json:"in_reply_to"`
+	References  []string         `json:"references"`
+	Attachments []attachmentData `json:"attachments"`
 }
 
 func (h *ComposeHandler) Send(c fiber.Ctx) error {
@@ -102,7 +143,22 @@ func (h *ComposeHandler) Send(c fiber.Ctx) error {
 		References: req.References,
 	}
 
-	if err := smtp.Send(smtpCfg, email, password, msg); err != nil {
+	var smtpAttachments []smtp.Attachment
+	for _, att := range req.Attachments {
+		decoded, err := base64.StdEncoding.DecodeString(att.Content)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": fiber.Map{"code": "BAD_REQUEST", "message": "invalid attachment content"},
+			})
+		}
+		smtpAttachments = append(smtpAttachments, smtp.Attachment{
+			Filename:    att.Filename,
+			ContentType: att.ContentType,
+			Content:     decoded,
+		})
+	}
+
+	if err := smtp.SendWithAttachments(smtpCfg, email, password, msg, smtpAttachments); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fiber.Map{"code": "SMTP_FAILED", "message": err.Error()},
 		})
