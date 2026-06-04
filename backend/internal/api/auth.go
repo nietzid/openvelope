@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ type loginResponse struct {
 
 func (h *AuthHandler) Login(c fiber.Ctx) error {
 	var req loginRequest
+	fmt.Println("login request", req)
 	if err := c.Bind().JSON(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": fiber.Map{"code": "BAD_REQUEST", "message": "invalid request body"},

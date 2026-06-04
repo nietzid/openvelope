@@ -12,11 +12,11 @@ database:
 
 auth:
   imap:
-    host: localhost
+    host: mail.armsolusi.com
     port: 993
     tls: true
   smtp:
-    host: localhost
+    host: mail.armsolusi.com
     port: 587
     starttls: true
 
