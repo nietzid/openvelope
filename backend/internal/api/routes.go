@@ -34,7 +34,11 @@ func RegisterRoutes(app *fiber.App, cfg *config.Config, auth *AuthHandler, folde
 	msgGroup.Post("/flags", messages.UpdateFlags)
 	msgGroup.Delete("/:uid", messages.Delete)
 	msgGroup.Post("/move", messages.Move)
+	msgGroup.Post("/batch", messages.Batch)
+	msgGroup.Get("/:uid/attachments", messages.ListAttachments)
+	msgGroup.Get("/:uid/attachments/:partId", messages.DownloadAttachment)
 
 	protected.Post("/send", compose.Send)
+	protected.Post("/attachments/upload", compose.UploadAttachment)
 	protected.Get("/search", search.Search)
 }
