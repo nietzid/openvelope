@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle, lazy, Suspense } from 'react'
 import type { Editor } from '@tiptap/react'
-import TipTapEditor from './TipTapEditor'
+
+const TipTapEditor = lazy(() => import('./TipTapEditor'))
 import { sendEmail } from '../services/compose'
 
 export interface ComposePanelHandle {
@@ -189,10 +190,12 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
           </div>
 
           <div className="p-3">
-            <TipTapEditor
-              editorRef={handleEditorReady}
-              onChange={handleEditorChange}
-            />
+            <Suspense fallback={<div className="border border-gray-300 min-h-[200px] p-3 bg-white text-sm text-gray-400">Loading editor...</div>}>
+              <TipTapEditor
+                editorRef={handleEditorReady}
+                onChange={handleEditorChange}
+              />
+            </Suspense>
           </div>
         </div>
 
