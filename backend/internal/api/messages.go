@@ -174,6 +174,77 @@ func (h *MessageHandler) UpdateFlags(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{"ok": true})
 }
 
+type batchRequest struct {
+	Folder     string   `json:"folder"`
+	UIDs       []uint32 `json:"uids"`
+	Action     string   `json:"action"`                                       // mark_read, mark_unread, flag, unflag, delete, move
+	DestFolder string   `json:"dest_folder,omitempty"` // only for "move" action
+}
+
+func (h *MessageHandler) Batch(c fiber.Ctx) error {
+	var req batchRequest
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fiber.Map{"code": "BAD_REQUEST", "message": "invalid request body"},
+		})
+	}
+
+	if req.Folder == "" || len(req.UIDs) == 0 || req.Action == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fiber.Map{"code": "BAD_REQUEST", "message": "folder, uids, and action are required"},
+		})
+	}
+
+	conn, err := h.getUserConnection(c)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "IMAP_FAILED", "message": err.Error()},
+		})
+	}
+
+	switch req.Action {
+	case "mark_read":
+		err = imap.UpdateFlags(conn, req.Folder, req.UIDs, `\Seen`, true)
+	case "mark_unread":
+		err = imap.UpdateFlags(conn, req.Folder, req.UIDs, `\Seen`, false)
+	case "flag":
+		err = imap.UpdateFlags(conn, req.Folder, req.UIDs, `\Flagged`, true)
+	case "unflag":
+		err = imap.UpdateFlags(conn, req.Folder, req.UIDs, `\Flagged`, false)
+	case "delete":
+		for _, uid := range req.UIDs {
+			if delErr := imap.DeleteMessage(conn, req.Folder, uid); delErr != nil {
+				err = delErr
+				break
+			}
+		}
+	case "move":
+		if req.DestFolder == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": fiber.Map{"code": "BAD_REQUEST", "message": "dest_folder is required for move action"},
+			})
+		}
+		for _, uid := range req.UIDs {
+			if moveErr := imap.MoveMessage(conn, req.Folder, uid, req.DestFolder); moveErr != nil {
+				err = moveErr
+				break
+			}
+		}
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fiber.Map{"code": "BAD_REQUEST", "message": "invalid action: " + req.Action},
+		})
+	}
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "IMAP_FAILED", "message": err.Error()},
+		})
+	}
+
+	return c.JSON(fiber.Map{"ok": true, "affected": len(req.UIDs)})
+}
+
 func (h *MessageHandler) Delete(c fiber.Ctx) error {
 	folder := c.Query("folder", "INBOX")
 	uidStr := c.Params("uid")
