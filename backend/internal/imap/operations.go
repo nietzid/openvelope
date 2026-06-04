@@ -60,6 +60,13 @@ type SearchQuery struct {
 	Flagged *bool
 }
 
+type AttachmentInfo struct {
+	PartID      string `json:"part_id"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Size        uint32 `json:"size"`
+}
+
 func ParseMessageFlags(flags []string) MessageFlags {
 	mf := MessageFlags{}
 	for _, f := range flags {
@@ -456,6 +463,147 @@ func MoveMessage(conn *UserConnection, folder string, uid uint32, destFolder str
 		return fmt.Errorf("expunge: %w", err)
 	}
 	return nil
+}
+
+// ListAttachments returns a list of attachments for a given message UID.
+func ListAttachments(conn *UserConnection, folder string, uid uint32) ([]AttachmentInfo, error) {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if _, err := conn.Client.Select(folder, true); err != nil {
+		return nil, fmt.Errorf("select folder %q: %w", folder, err)
+	}
+
+	seq := new(goimap.SeqSet)
+	seq.AddNum(uid)
+
+	ch := make(chan *goimap.Message, 1)
+	done := make(chan error, 1)
+	go func() {
+		done <- conn.Client.UidFetch(seq, []goimap.FetchItem{goimap.FetchBodyStructure}, ch)
+	}()
+
+	var attachments []AttachmentInfo
+	for msg := range ch {
+		if msg.BodyStructure != nil {
+			attachments = collectAttachments(msg.BodyStructure, "")
+		}
+	}
+
+	if err := <-done; err != nil {
+		return nil, fmt.Errorf("fetch body structure: %w", err)
+	}
+
+	return attachments, nil
+}
+
+func collectAttachments(bs *goimap.BodyStructure, prefix string) []AttachmentInfo {
+	var result []AttachmentInfo
+
+	if len(bs.Parts) > 0 {
+		for i, part := range bs.Parts {
+			partID := fmt.Sprintf("%s%d", prefix, i+1)
+			result = append(result, collectAttachments(part, partID+".")...)
+		}
+	} else {
+		isAttachment := false
+		if strings.EqualFold(bs.Disposition, "attachment") {
+			isAttachment = true
+		}
+		// Also treat non-text parts with a filename as attachments
+		if !isAttachment && bs.Params["name"] != "" && !strings.HasPrefix(bs.MIMEType, "text") {
+			isAttachment = true
+		}
+
+		if isAttachment {
+			partID := strings.TrimSuffix(prefix, ".")
+			if partID == "" {
+				partID = "1"
+			}
+			filename := bs.Params["name"]
+			if filename == "" {
+				filename = bs.DispositionParams["filename"]
+			}
+			result = append(result, AttachmentInfo{
+				PartID:      partID,
+				Filename:    filename,
+				ContentType: bs.MIMEType + "/" + bs.MIMESubType,
+				Size:        bs.Size,
+			})
+		}
+	}
+
+	return result
+}
+
+// GetAttachment fetches the content of a specific attachment by part ID.
+func GetAttachment(conn *UserConnection, folder string, uid uint32, partID string) ([]byte, string, string, error) {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if _, err := conn.Client.Select(folder, true); err != nil {
+		return nil, "", "", fmt.Errorf("select folder %q: %w", folder, err)
+	}
+
+	seq := new(goimap.SeqSet)
+	seq.AddNum(uid)
+
+	// Parse part ID into section
+	section, err := goimap.ParseBodySectionName(goimap.FetchItem("BODY[" + partID + "]"))
+	if err != nil {
+		return nil, "", "", fmt.Errorf("parse section: %w", err)
+	}
+
+	ch := make(chan *goimap.Message, 1)
+	done := make(chan error, 1)
+	go func() {
+		done <- conn.Client.UidFetch(seq, []goimap.FetchItem{section.FetchItem()}, ch)
+	}()
+
+	var body []byte
+	var contentType string
+	var filename string
+	for msg := range ch {
+		literal := msg.GetBody(section)
+		if literal != nil {
+			body, err = io.ReadAll(literal)
+			if err != nil {
+				return nil, "", "", fmt.Errorf("read body: %w", err)
+			}
+		}
+		if msg.BodyStructure != nil {
+			contentType = findPartContentType(msg.BodyStructure, partID)
+			filename = findPartFilename(msg.BodyStructure, partID)
+		}
+	}
+
+	if err := <-done; err != nil {
+		return nil, "", "", fmt.Errorf("fetch attachment: %w", err)
+	}
+
+	return body, contentType, filename, nil
+}
+
+func findPartContentType(bs *goimap.BodyStructure, partID string) string {
+	if bs.MIMEType != "" && len(bs.Parts) == 0 {
+		return bs.MIMEType + "/" + bs.MIMESubType
+	}
+	for _, part := range bs.Parts {
+		if ct := findPartContentType(part, partID); ct != "" {
+			return ct
+		}
+	}
+	return "application/octet-stream"
+}
+
+func findPartFilename(bs *goimap.BodyStructure, partID string) string {
+	if bs.Params["name"] != "" {
+		return bs.Params["name"]
+	}
+	if bs.DispositionParams["filename"] != "" {
+		return bs.DispositionParams["filename"]
+	}
+	return ""
 }
 
 func formatAddress(addr *goimap.Address) string {

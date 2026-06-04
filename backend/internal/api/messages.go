@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/arfiansyah/webmail/internal/auth"
@@ -305,4 +306,63 @@ func (h *MessageHandler) Move(c fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"ok": true})
+}
+
+func (h *MessageHandler) ListAttachments(c fiber.Ctx) error {
+	folder := c.Query("folder", "INBOX")
+	uidStr := c.Params("uid")
+	uid, err := strconv.ParseUint(uidStr, 10, 32)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fiber.Map{"code": "BAD_REQUEST", "message": "invalid uid"},
+		})
+	}
+
+	conn, err := h.getUserConnection(c)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "IMAP_FAILED", "message": err.Error()},
+		})
+	}
+
+	attachments, err := imap.ListAttachments(conn, folder, uint32(uid))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "IMAP_FAILED", "message": err.Error()},
+		})
+	}
+
+	return c.JSON(fiber.Map{"attachments": attachments})
+}
+
+func (h *MessageHandler) DownloadAttachment(c fiber.Ctx) error {
+	folder := c.Query("folder", "INBOX")
+	uidStr := c.Params("uid")
+	partID := c.Params("partId")
+	uid, err := strconv.ParseUint(uidStr, 10, 32)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fiber.Map{"code": "BAD_REQUEST", "message": "invalid uid"},
+		})
+	}
+
+	conn, err := h.getUserConnection(c)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "IMAP_FAILED", "message": err.Error()},
+		})
+	}
+
+	body, contentType, filename, err := imap.GetAttachment(conn, folder, uint32(uid), partID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "IMAP_FAILED", "message": err.Error()},
+		})
+	}
+
+	c.Set("Content-Type", contentType)
+	if filename != "" {
+		c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	}
+	return c.Send(body)
 }
