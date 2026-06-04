@@ -36,6 +36,19 @@ type FolderInfo struct {
 	Delimiter string `json:"delimiter"`
 }
 
+type MessageHeaders struct {
+	UID        uint32       `json:"uid"`
+	From       string       `json:"from"`
+	To         string       `json:"to"`
+	Cc         string       `json:"cc"`
+	Subject    string       `json:"subject"`
+	Date       time.Time    `json:"date"`
+	MessageID  string       `json:"message_id"`
+	InReplyTo  string       `json:"in_reply_to"`
+	References string       `json:"references"`
+	Flags      MessageFlags `json:"flags"`
+}
+
 type SearchQuery struct {
 	Text    string
 	From    string
@@ -287,6 +300,86 @@ func GetMessage(conn *UserConnection, folder string, uid uint32) ([]byte, error)
 	}
 
 	return body, nil
+}
+
+// GetMessageHeaders fetches the envelope (from, to, cc, subject, date, message-id, in-reply-to, references) without the full body.
+// Note: References is not part of IMAP ENVELOPE; we fetch it via HEADER.FIELDS.
+func GetMessageHeaders(conn *UserConnection, folder string, uid uint32) (*MessageHeaders, error) {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if _, err := conn.Client.Select(folder, true); err != nil {
+		return nil, fmt.Errorf("select folder %q: %w", folder, err)
+	}
+
+	seq := new(goimap.SeqSet)
+	seq.AddNum(uid)
+
+	section := &goimap.BodySectionName{
+		Peek: true,
+	}
+	section.Fields = []string{"References"}
+
+	items := []goimap.FetchItem{
+		goimap.FetchUid,
+		goimap.FetchEnvelope,
+		goimap.FetchFlags,
+		section.FetchItem(),
+	}
+
+	ch := make(chan *goimap.Message, 1)
+	done := make(chan error, 1)
+	go func() {
+		done <- conn.Client.UidFetch(seq, items, ch)
+	}()
+
+	var headers MessageHeaders
+	for msg := range ch {
+		headers.UID = msg.Uid
+		if msg.Envelope != nil {
+			if msg.Envelope.From != nil && len(msg.Envelope.From) > 0 {
+				headers.From = formatAddress(msg.Envelope.From[0])
+			}
+			if msg.Envelope.To != nil && len(msg.Envelope.To) > 0 {
+				headers.To = formatAddresses(msg.Envelope.To)
+			}
+			if msg.Envelope.Cc != nil && len(msg.Envelope.Cc) > 0 {
+				headers.Cc = formatAddresses(msg.Envelope.Cc)
+			}
+			headers.Subject = msg.Envelope.Subject
+			headers.Date = msg.Envelope.Date
+			headers.MessageID = msg.Envelope.MessageId
+			headers.InReplyTo = msg.Envelope.InReplyTo
+		}
+		if msg.Flags != nil {
+			headers.Flags = ParseMessageFlags(msg.Flags)
+		}
+		// Parse References from the fetched header fields
+		if literal := msg.GetBody(section); literal != nil {
+			if data, err := io.ReadAll(literal); err == nil {
+				headers.References = parseReferencesHeader(string(data))
+			}
+		}
+	}
+
+	if err := <-done; err != nil {
+		return nil, fmt.Errorf("fetch headers: %w", err)
+	}
+
+	return &headers, nil
+}
+
+// parseReferencesHeader extracts the References value from a raw "References: ..." header line.
+func parseReferencesHeader(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	// The header line looks like: "References: <id1> <id2>\r\n"
+	if idx := strings.Index(raw, ":"); idx >= 0 {
+		raw = strings.TrimSpace(raw[idx+1:])
+	}
+	return strings.Join(strings.Fields(raw), " ")
 }
 
 // UpdateFlags sets or clears message flags.

@@ -110,6 +110,33 @@ func (h *MessageHandler) Get(c fiber.Ctx) error {
 	return c.Send(body)
 }
 
+func (h *MessageHandler) GetHeaders(c fiber.Ctx) error {
+	folder := c.Query("folder", "INBOX")
+	uidStr := c.Params("uid")
+	uid, err := strconv.ParseUint(uidStr, 10, 32)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fiber.Map{"code": "BAD_REQUEST", "message": "invalid uid"},
+		})
+	}
+
+	conn, err := h.getUserConnection(c)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "IMAP_FAILED", "message": err.Error()},
+		})
+	}
+
+	headers, err := imap.GetMessageHeaders(conn, folder, uint32(uid))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "IMAP_FAILED", "message": err.Error()},
+		})
+	}
+
+	return c.JSON(headers)
+}
+
 type updateFlagsRequest struct {
 	Folder string   `json:"folder"`
 	UIDs   []uint32 `json:"uids"`

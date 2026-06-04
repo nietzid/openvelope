@@ -29,6 +29,7 @@ func RegisterRoutes(app *fiber.App, cfg *config.Config, auth *AuthHandler, folde
 
 	msgGroup := protected.Group("/messages")
 	msgGroup.Get("/", messages.List)
+	msgGroup.Get("/:uid/headers", messages.GetHeaders)
 	msgGroup.Get("/:uid", messages.Get)
 	msgGroup.Post("/flags", messages.UpdateFlags)
 	msgGroup.Delete("/:uid", messages.Delete)
