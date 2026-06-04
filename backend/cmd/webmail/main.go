@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/arfiansyah/webmail/internal/api"
 	"github.com/arfiansyah/webmail/internal/config"
@@ -49,8 +50,8 @@ func main() {
 
 	app := fiber.New(fiber.Config{
 		AppName:      "Webmail",
-		ReadTimeout:  30,
-		WriteTimeout: 30,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
 	})
 
 	app.Use(cors.New(cors.Config{
