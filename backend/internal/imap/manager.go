@@ -114,3 +114,10 @@ func (m *Manager) CloseAll() {
 		delete(m.connections, email)
 	}
 }
+
+// StartIdle starts an IMAP IDLE watcher for the given user.
+func (m *Manager) StartIdle(email string, onEvent func(event IdleEvent)) *IdleWatcher {
+	watcher := NewIdleWatcher(m, email, onEvent)
+	watcher.Start()
+	return watcher
+}
