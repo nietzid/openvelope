@@ -8,6 +8,7 @@ interface MailboxState {
   selectedUIDs: Set<number>
   messages: MessageSummary[]
   currentMessage: string | null
+  currentMessageText: { html: string; text: string } | null
   page: number
   pageSize: number
   total: number
@@ -19,6 +20,8 @@ interface MailboxState {
   selectAll: (uids: number[]) => void
   setMessages: (messages: MessageSummary[]) => void
   setCurrentMessage: (msg: string | null) => void
+  setCurrentMessageText: (text: { html: string; text: string } | null) => void
+  updateMessageFlags: (uid: number, flags: Partial<MessageSummary['flags']>) => void
   setPage: (page: number) => void
   setPageSize: (size: number) => void
   setTotal: (total: number) => void
@@ -31,6 +34,7 @@ export const useMailboxStore = create<MailboxState>((set) => ({
   selectedUIDs: new Set(),
   messages: [],
   currentMessage: null,
+  currentMessageText: null,
   page: 0,
   pageSize: 50,
   total: 0,
@@ -41,6 +45,7 @@ export const useMailboxStore = create<MailboxState>((set) => ({
     selectedUIDs: new Set(),
     messages: [],
     currentMessage: null,
+    currentMessageText: null,
     page: 0,
     total: 0,
   }),
@@ -58,6 +63,12 @@ export const useMailboxStore = create<MailboxState>((set) => ({
   selectAll: (uids) => set({ selectedUIDs: new Set(uids) }),
   setMessages: (messages) => set({ messages }),
   setCurrentMessage: (msg) => set({ currentMessage: msg }),
+  setCurrentMessageText: (text) => set({ currentMessageText: text }),
+  updateMessageFlags: (uid, flags) => set((state) => ({
+    messages: state.messages.map((m) =>
+      m.uid === uid ? { ...m, flags: { ...m.flags, ...flags } } : m
+    ),
+  })),
   setPage: (page) => set({ page }),
   setPageSize: (pageSize) => set({ pageSize, page: 0 }),
   setTotal: (total) => set({ total }),

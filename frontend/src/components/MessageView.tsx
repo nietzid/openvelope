@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import PostalMime, { type Address, type Mailbox } from 'postal-mime'
 import { useMailboxStore } from '../stores/mailboxStore'
-import { getMessage, listAttachments, downloadAttachment } from '../services/messages'
+import { getMessage, listAttachments, downloadAttachment, updateFlags } from '../services/messages'
 import type { AttachmentInfo, MessageSummary } from '../types'
 
 interface ParsedEmail {
@@ -84,11 +84,13 @@ interface MessageBodyProps {
   uid: number
   summary: MessageSummary | undefined
   onLoad: (raw: string | null) => void
+  onTextLoad: (text: { html: string; text: string } | null) => void
+  onSeen: () => void
   onReply?: (folder: string, uid: number) => void
   onForward?: (folder: string, uid: number) => void
 }
 
-function MessageBody({ folder, uid, summary, onLoad, onReply, onForward }: MessageBodyProps) {
+function MessageBody({ folder, uid, summary, onLoad, onTextLoad, onSeen, onReply, onForward }: MessageBodyProps) {
   const [parsed, setParsed] = useState<ParsedEmail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<AttachmentInfo[]>([])
@@ -96,6 +98,7 @@ function MessageBody({ folder, uid, summary, onLoad, onReply, onForward }: Messa
   useEffect(() => {
     let cancelled = false
     onLoad(null)
+    onTextLoad(null)
 
     void (async () => {
       // Load attachments in parallel
@@ -117,6 +120,13 @@ function MessageBody({ folder, uid, summary, onLoad, onReply, onForward }: Messa
       }
       if (cancelled) return
       onLoad(rfc822)
+      // Mark message as seen (fire and forget) and notify parent to update local store
+      if (!summary?.flags.seen) {
+        updateFlags(folder, [uid], 'seen', true).catch(() => {
+          // ignore — local update still happens
+        })
+        onSeen()
+      }
 
       try {
         const parser = new PostalMime()
@@ -135,6 +145,7 @@ function MessageBody({ folder, uid, summary, onLoad, onReply, onForward }: Messa
           html: safeHtml,
           text: email.text || '',
         })
+        onTextLoad({ html: safeHtml, text: email.text || '' })
       } catch (parseErr) {
         console.error('Failed to parse message', parseErr)
         if (cancelled) return
@@ -292,6 +303,8 @@ function MessageView({ onReply, onForward }: MessageViewProps) {
   const currentFolder = useMailboxStore((state) => state.currentFolder)
   const selectedUID = useMailboxStore((state) => state.selectedUID)
   const setCurrentMessage = useMailboxStore((state) => state.setCurrentMessage)
+  const setCurrentMessageText = useMailboxStore((state) => state.setCurrentMessageText)
+  const updateMessageFlags = useMailboxStore((state) => state.updateMessageFlags)
   const messages = useMailboxStore((state) => state.messages)
 
   if (selectedUID === null) {
@@ -313,6 +326,8 @@ function MessageView({ onReply, onForward }: MessageViewProps) {
       uid={selectedUID}
       summary={summary}
       onLoad={setCurrentMessage}
+      onTextLoad={setCurrentMessageText}
+      onSeen={() => updateMessageFlags(selectedUID, { seen: true })}
       onReply={onReply}
       onForward={onForward}
     />

@@ -34,6 +34,14 @@ function TipTapEditor({ initialContent = '', onChange, editorRef }: TipTapEditor
     editorRef?.(editor)
   }, [editor, editorRef])
 
+  // Update content when initialContent changes (for reply/forward pre-fill)
+  useEffect(() => {
+    if (editor && initialContent) {
+      editor.commands.setContent(initialContent)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialContent, editor])
+
   if (!editor) {
     return (
       <div className="border border-gray-300 min-h-[200px] p-3 bg-white">

@@ -102,25 +102,13 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
       setIsSending(false)
       setInReplyTo('')
       setReferences('')
-      // clear editor content on next tick (after editor mounts)
-      const t = setTimeout(() => {
-        editorRef.current?.commands.setContent('')
-      }, 0)
-      return () => clearTimeout(t)
     }
-    if (isOpen && (mode === 'reply' || mode === 'forward')) {
-      setError(null)
-      setIsSending(false)
-      // Set editor content for reply/forward on next tick
-      const t = setTimeout(() => {
-        editorRef.current?.commands.setContent(body)
-      }, 0)
-      return () => clearTimeout(t)
-    }
-    return undefined
   }, [isOpen, mode])
 
-  const handleOpen = useCallback(() => setIsOpen(true), [])
+  // Key for the editor — remounts it when a new compose session starts
+  // so pre-filled content (reply/forward) is set correctly.
+  const editorKey = `${mode}-${isOpen}`
+
   const handleClose = useCallback(() => {
     setIsOpen(false)
     setError(null)
@@ -170,15 +158,7 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
   }
 
   if (!isOpen) {
-    return (
-      <button
-        type="button"
-        onClick={handleOpen}
-        className="fixed bottom-6 right-6 bg-black text-white rounded-full shadow-lg px-6 py-3 font-medium hover:bg-gray-800 cursor-pointer z-40"
-      >
-        Compose
-      </button>
-    )
+    return null
   }
 
   const dialogTitle = mode === 'reply' ? 'Reply' : mode === 'forward' ? 'Forward' : 'New Message'
@@ -294,8 +274,10 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
           <div className="p-3">
             <Suspense fallback={<div className="border border-gray-300 min-h-[200px] p-3 bg-white text-sm text-gray-400">Loading editor...</div>}>
               <TipTapEditor
+                key={editorKey}
                 editorRef={handleEditorReady}
                 onChange={handleEditorChange}
+                initialContent={body}
               />
             </Suspense>
           </div>

@@ -15,7 +15,7 @@ function Mailbox() {
   const email = useAuthStore((state) => state.email)
   const clearAuth = useAuthStore((state) => state.clearAuth)
   const composeRef = useRef<ComposePanelHandle>(null)
-  const currentMessage = useMailboxStore((state) => state.currentMessage)
+  const currentMessageText = useMailboxStore((state) => state.currentMessageText)
 
   useMailboxUpdates()
 
@@ -35,10 +35,12 @@ function Mailbox() {
       const references = headers.references
         ? `${headers.references} ${headers.message_id}`.trim()
         : headers.message_id
+      // Prefer HTML body; fall back to plain text
+      const body = currentMessageText?.html || currentMessageText?.text || ''
       composeRef.current?.openReply({
         to: headers.from,
         subject: headers.subject,
-        body: currentMessage ?? '',
+        body,
         inReplyTo: headers.message_id,
         references,
       })
@@ -50,9 +52,10 @@ function Mailbox() {
   const handleForward = async (folder: string, uid: number) => {
     try {
       const headers = await getMessageHeaders(folder, uid)
+      const body = currentMessageText?.html || currentMessageText?.text || ''
       composeRef.current?.openForward({
         subject: headers.subject,
-        body: currentMessage ?? '',
+        body,
       })
     } catch (err) {
       console.error('Failed to load message headers for forward', err)
