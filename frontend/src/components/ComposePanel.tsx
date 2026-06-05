@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle, lazy, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import type { Editor } from '@tiptap/react'
 
 const TipTapEditor = lazy(() => import('./TipTapEditor'))
@@ -193,17 +194,21 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center pointer-events-none">
+  return createPortal(
+    <div
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{ zIndex: 9999 }}
+    >
       <div
-        className="absolute inset-0 bg-black/30 pointer-events-auto"
+        className="absolute inset-0 bg-black/30"
         onClick={handleClose}
         aria-hidden="true"
       />
       <div
         role="dialog"
         aria-label={dialogTitle}
-        className="relative w-full max-w-3xl mx-4 mb-4 bg-white border border-gray-300 shadow-2xl flex flex-col max-h-[90vh] pointer-events-auto"
+        className="relative w-full max-w-3xl bg-white border border-gray-300 shadow-2xl flex flex-col max-h-[90vh] rounded"
+        style={{ zIndex: 10000 }}
       >
         <header className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b border-gray-300">
           <h2 className="text-sm font-semibold text-black">{dialogTitle}</h2>
@@ -341,7 +346,8 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 })
 
