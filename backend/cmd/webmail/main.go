@@ -2,10 +2,12 @@ package main
 
 import (
 	"flag"
+	"io/fs"
 	"log"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/arfiansyah/webmail/internal/config"
 	"github.com/arfiansyah/webmail/internal/imap"
 	"github.com/arfiansyah/webmail/internal/models"
+	"github.com/arfiansyah/webmail/internal/web"
 	"github.com/arfiansyah/webmail/internal/ws"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
@@ -66,6 +69,62 @@ func main() {
 	}))
 
 	api.RegisterRoutes(app, cfg, authHandler, folderHandler, messageHandler, composeHandler, searchHandler)
+
+	mimeTypes := map[string]string{
+		".html": "text/html; charset=utf-8",
+		".js":   "application/javascript; charset=utf-8",
+		".css":  "text/css; charset=utf-8",
+		".json": "application/json; charset=utf-8",
+		".svg":  "image/svg+xml",
+		".png":  "image/png",
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".gif":  "image/gif",
+		".ico":  "image/x-icon",
+		".woff": "font/woff",
+		".woff2": "font/woff2",
+		".ttf":  "font/ttf",
+		".map":  "application/json",
+	}
+	getContentType := func(path string) string {
+		dot := strings.LastIndex(path, ".")
+		if dot < 0 {
+			return ""
+		}
+		return mimeTypes[path[dot:]]
+	}
+
+	// Serve embedded frontend (SPA with fallback to index.html)
+	distFS, err := web.DistFS()
+	if err != nil {
+		log.Printf("warning: failed to load embedded frontend: %v", err)
+	} else {
+		app.Use(func(c fiber.Ctx) error {
+			path := c.Path()
+			// Skip API and WebSocket paths
+			if strings.HasPrefix(path, "/api") || strings.HasPrefix(path, "/ws") || path == "/health" {
+				return c.Next()
+			}
+			// Try to serve the requested static file
+			cleanPath := strings.TrimPrefix(path, "/")
+			if cleanPath != "" {
+				if data, readErr := fs.ReadFile(distFS, cleanPath); readErr == nil {
+					contentType := getContentType(cleanPath)
+					if contentType != "" {
+						c.Set("Content-Type", contentType)
+					}
+					return c.Send(data)
+				}
+			}
+			// Fall back to index.html for SPA routing
+			indexHTML, readErr := fs.ReadFile(distFS, "index.html")
+			if readErr != nil {
+				return c.Status(500).SendString("Frontend not built")
+			}
+			c.Set("Content-Type", "text/html; charset=utf-8")
+			return c.Send(indexHTML)
+		})
+	}
 
 	go func() {
 		addr := cfg.Server.Host + ":" + strconv.Itoa(cfg.Server.Port)
