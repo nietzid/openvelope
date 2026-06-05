@@ -75,3 +75,31 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
 }
+
+func TestAuthMiddleware_ValidTokenQueryParam(t *testing.T) {
+	// WebSocket connections cannot set custom headers, so the token must be
+	// accepted via the ?token= query parameter.
+	secret := "test-secret"
+	token, err := auth.GenerateAccessToken("user@example.com", secret, 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	app := fiber.New()
+	app.Use(AuthRequired(secret))
+	app.Get("/test", func(c fiber.Ctx) error {
+		email := c.Locals("email").(string)
+		return c.JSON(fiber.Map{"email": email})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test?token="+token, nil)
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+}
