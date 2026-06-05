@@ -7,9 +7,10 @@ import (
 	"github.com/arfiansyah/webmail/internal/ws"
 	"github.com/gofiber/contrib/v3/websocket"
 	"github.com/gofiber/fiber/v3"
+	"gorm.io/gorm"
 )
 
-func RegisterRoutes(app *fiber.App, cfg *config.Config, hub *ws.Hub, manager *imap.Manager, auth *AuthHandler, folders *FolderHandler, messages *MessageHandler, compose *ComposeHandler, search *SearchHandler) {
+func RegisterRoutes(app *fiber.App, cfg *config.Config, db *gorm.DB, hub *ws.Hub, manager *imap.Manager, auth *AuthHandler, folders *FolderHandler, messages *MessageHandler, compose *ComposeHandler, search *SearchHandler) {
 	app.Get("/health", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
@@ -46,7 +47,7 @@ func RegisterRoutes(app *fiber.App, cfg *config.Config, hub *ws.Hub, manager *im
 	protected.Get("/search", search.Search)
 
 	// WebSocket route (also auth-protected via middleware)
-	app.Get("/ws", middleware.AuthRequired(cfg.Session.JWTSecret), wsUpgrade(), ws.HandleWebSocket(hub, manager))
+	app.Get("/ws", middleware.AuthRequired(cfg.Session.JWTSecret), wsUpgrade(), ws.HandleWebSocket(hub, manager, db, cfg))
 }
 
 func wsUpgrade() fiber.Handler {

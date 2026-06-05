@@ -68,7 +68,7 @@ func main() {
 		Format: "[${time}] ${status} ${method} ${path} (${latency})\n",
 	}))
 
-	api.RegisterRoutes(app, cfg, hub, manager, authHandler, folderHandler, messageHandler, composeHandler, searchHandler)
+	api.RegisterRoutes(app, cfg, db, hub, manager, authHandler, folderHandler, messageHandler, composeHandler, searchHandler)
 
 	mimeTypes := map[string]string{
 		".html": "text/html; charset=utf-8",

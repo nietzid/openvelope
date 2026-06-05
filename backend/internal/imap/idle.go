@@ -1,12 +1,15 @@
 package imap
 
 import (
+	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/emersion/go-imap-idle"
+	"github.com/emersion/go-imap/client"
 )
 
 // IdleEvent represents an event from the IDLE watcher.
@@ -21,9 +24,12 @@ func (e IdleEvent) JSON() ([]byte, error) {
 }
 
 // IdleWatcher watches an IMAP mailbox for changes using the IDLE extension.
+// It uses its own dedicated IMAP connection so it never blocks the main
+// connection used by API operations (folder listing, message fetch, etc.).
 type IdleWatcher struct {
 	manager     *Manager
 	email       string
+	password    string
 	done        chan struct{}
 	stopped     bool
 	mu          sync.Mutex
@@ -32,12 +38,14 @@ type IdleWatcher struct {
 }
 
 // NewIdleWatcher creates a new IDLE watcher for the given user.
-func NewIdleWatcher(manager *Manager, email string, onEvent func(IdleEvent)) *IdleWatcher {
+// The password is required to authenticate the dedicated IDLE connection.
+func NewIdleWatcher(manager *Manager, email, password string, onEvent func(IdleEvent)) *IdleWatcher {
 	return &IdleWatcher{
-		manager: manager,
-		email:   email,
-		done:    make(chan struct{}),
-		onEvent: onEvent,
+		manager:  manager,
+		email:    email,
+		password: password,
+		done:     make(chan struct{}),
+		onEvent:  onEvent,
 	}
 }
 
@@ -65,9 +73,11 @@ func (w *IdleWatcher) run() {
 		}
 		w.mu.Unlock()
 
-		conn, err := w.manager.GetOrCreate(w.email, "")
+		// Open a dedicated IDLE connection (separate from the main connection
+		// used by API handlers).
+		c, err := w.dial()
 		if err != nil {
-			// No connection available — wait and retry with exponential backoff
+			log.Printf("idle dial failed for %s: %v", w.email, err)
 			if w.reconnDelay == 0 {
 				w.reconnDelay = time.Second
 			}
@@ -83,12 +93,10 @@ func (w *IdleWatcher) run() {
 		// Reset backoff on successful connection
 		w.reconnDelay = 0
 
-		// Select INBOX
-		conn.mu.Lock()
-		_, err = conn.Client.Select("INBOX", false)
-		conn.mu.Unlock()
-		if err != nil {
+		// Select INBOX on the IDLE connection (read-only)
+		if _, err := c.Select("INBOX", true); err != nil {
 			log.Printf("idle select INBOX failed for %s: %v", w.email, err)
+			c.Logout()
 			select {
 			case <-w.done:
 				return
@@ -97,45 +105,61 @@ func (w *IdleWatcher) run() {
 			continue
 		}
 
-		// Set up updates channel for this connection
-		updates := make(chan interface{})
-		// Note: go-imap client.Updates is chan client.Update; we use interface{} for flexibility
-		// The actual update handling will be done in the integration step
-
-		// Start IDLE
-		w.doIdle(conn, updates)
+		// Run the IDLE loop. Blocks until the server sends an update or we stop.
+		w.doIdle(c)
 	}
 }
 
-func (w *IdleWatcher) doIdle(conn *UserConnection, updates chan interface{}) {
-	conn.mu.Lock()
-	defer conn.mu.Unlock()
+// dial creates a new dedicated IMAP client connection for IDLE.
+func (w *IdleWatcher) dial() (*client.Client, error) {
+	addr := w.manager.config.Address()
+	var c *client.Client
+	var err error
+	if w.manager.config.TLS {
+		c, err = client.DialTLS(addr, &tls.Config{})
+	} else {
+		c, err = client.Dial(addr)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("dial: %w", err)
+	}
+	if err := c.Login(w.email, w.password); err != nil {
+		c.Logout()
+		return nil, fmt.Errorf("login: %w", err)
+	}
+	return c, nil
+}
 
-	idleClient := idle.NewClient(conn.Client)
+func (w *IdleWatcher) doIdle(c *client.Client) {
+	idleClient := idle.NewClient(c)
 
-	// Create a done channel to stop IDLE
+	// done channel signals the idle goroutine to stop
 	idleDone := make(chan struct{})
 
-	// Watch for watcher stop signal
+	// Goroutine: close idleDone when watcher is stopped so Idle() returns
 	go func() {
-		select {
-		case <-w.done:
-			close(idleDone)
-		case <-updates:
-			// Got an update from the server, notify the event handler
-			if w.onEvent != nil {
-				w.onEvent(IdleEvent{
-					Type: "mailbox_update",
-					Data: map[string]interface{}{
-						"email": w.email,
-					},
-				})
-			}
-		}
+		<-w.done
+		close(idleDone)
 	}()
 
-	// IDLE blocks until server sends notification or done is closed
+	// IDLE blocks until server sends notification or idleDone is closed
 	_ = idleClient.Idle(idleDone)
+
+	// After IDLE returns (server update OR we stopped), emit a single
+	// mailbox_update event so the client knows to refresh.
+	if w.onEvent != nil {
+		w.onEvent(IdleEvent{
+			Type: "mailbox_update",
+			Data: map[string]interface{}{
+				"email":  w.email,
+				"folder": "INBOX",
+			},
+		})
+	}
+
+	// Close the IDLE connection — a fresh one will be opened in the next
+	// iteration of run() if the watcher is still active.
+	c.Logout()
 }
 
 // minDuration returns the smaller of two durations.
