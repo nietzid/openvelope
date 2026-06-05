@@ -3,11 +3,14 @@ package ws
 import (
 	"log"
 
+	"github.com/arfiansyah/webmail/internal/imap"
 	"github.com/gofiber/contrib/v3/websocket"
 	"github.com/gofiber/fiber/v3"
 )
 
-func HandleWebSocket(hub *Hub) fiber.Handler {
+// HandleWebSocket returns a Fiber handler that upgrades to WebSocket and
+// starts an IMAP IDLE watcher for the connected user.
+func HandleWebSocket(hub *Hub, manager *imap.Manager) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		email, ok := c.Locals("email").(string)
 		if !ok {
@@ -26,7 +29,26 @@ func HandleWebSocket(hub *Hub) fiber.Handler {
 
 			hub.Register <- client
 
+			// Start IMAP IDLE watcher for real-time mailbox updates
+			var watcher *imap.IdleWatcher
+			if manager != nil {
+				watcher = manager.StartIdle(email, func(event imap.IdleEvent) {
+					data, err := event.JSON()
+					if err != nil {
+						log.Printf("idle event marshal: %v", err)
+						return
+					}
+					hub.Broadcast <- BroadcastMessage{
+						Email: email,
+						Data:  data,
+					}
+				})
+			}
+
 			defer func() {
+				if watcher != nil {
+					watcher.Stop()
+				}
 				hub.Unregister <- client
 				conn.Close()
 			}()

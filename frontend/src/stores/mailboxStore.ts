@@ -8,6 +8,9 @@ interface MailboxState {
   selectedUIDs: Set<number>
   messages: MessageSummary[]
   currentMessage: string | null
+  page: number
+  pageSize: number
+  total: number
   setFolders: (folders: Folder[]) => void
   setCurrentFolder: (name: string) => void
   setSelectedUID: (uid: number | null) => void
@@ -16,6 +19,9 @@ interface MailboxState {
   selectAll: (uids: number[]) => void
   setMessages: (messages: MessageSummary[]) => void
   setCurrentMessage: (msg: string | null) => void
+  setPage: (page: number) => void
+  setPageSize: (size: number) => void
+  setTotal: (total: number) => void
 }
 
 export const useMailboxStore = create<MailboxState>((set) => ({
@@ -25,8 +31,19 @@ export const useMailboxStore = create<MailboxState>((set) => ({
   selectedUIDs: new Set(),
   messages: [],
   currentMessage: null,
+  page: 0,
+  pageSize: 50,
+  total: 0,
   setFolders: (folders) => set({ folders }),
-  setCurrentFolder: (name) => set({ currentFolder: name, selectedUID: null, selectedUIDs: new Set(), messages: [], currentMessage: null }),
+  setCurrentFolder: (name) => set({
+    currentFolder: name,
+    selectedUID: null,
+    selectedUIDs: new Set(),
+    messages: [],
+    currentMessage: null,
+    page: 0,
+    total: 0,
+  }),
   setSelectedUID: (uid) => set({ selectedUID: uid }),
   toggleUID: (uid) => set((state) => {
     const next = new Set(state.selectedUIDs)
@@ -41,4 +58,7 @@ export const useMailboxStore = create<MailboxState>((set) => ({
   selectAll: (uids) => set({ selectedUIDs: new Set(uids) }),
   setMessages: (messages) => set({ messages }),
   setCurrentMessage: (msg) => set({ currentMessage: msg }),
+  setPage: (page) => set({ page }),
+  setPageSize: (pageSize) => set({ pageSize, page: 0 }),
+  setTotal: (total) => set({ total }),
 }))

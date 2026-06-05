@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"encoding/json"
 	"log"
 	"sync"
 	"time"
@@ -12,6 +13,11 @@ import (
 type IdleEvent struct {
 	Type string      `json:"event"`
 	Data interface{} `json:"data"`
+}
+
+// JSON serializes the event.
+func (e IdleEvent) JSON() ([]byte, error) {
+	return json.Marshal(e)
 }
 
 // IdleWatcher watches an IMAP mailbox for changes using the IDLE extension.

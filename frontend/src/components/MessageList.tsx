@@ -102,6 +102,12 @@ function MessageList() {
   const toggleUID = useMailboxStore((state) => state.toggleUID)
   const clearSelection = useMailboxStore((state) => state.clearSelection)
   const selectAll = useMailboxStore((state) => state.selectAll)
+  const page = useMailboxStore((state) => state.page)
+  const pageSize = useMailboxStore((state) => state.pageSize)
+  const total = useMailboxStore((state) => state.total)
+  const setPage = useMailboxStore((state) => state.setPage)
+  const setPageSize = useMailboxStore((state) => state.setPageSize)
+  const setTotal = useMailboxStore((state) => state.setTotal)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -111,10 +117,11 @@ function MessageList() {
     let cancelled = false
     setLoading(true)
     setError(null)
-    listMessages(currentFolder, 0, 200)
+    listMessages(currentFolder, page, pageSize)
       .then((res) => {
         if (cancelled) return
         setMessages(res.messages)
+        setTotal(res.total)
       })
       .catch((err) => {
         if (cancelled) return
@@ -128,7 +135,7 @@ function MessageList() {
     return () => {
       cancelled = true
     }
-  }, [currentFolder, setMessages])
+  }, [currentFolder, page, pageSize, setMessages, setTotal])
 
   const handleMarkRead = async () => {
     await batchOperation(currentFolder, Array.from(selectedUIDs), 'mark_read')
@@ -223,6 +230,39 @@ function MessageList() {
           </div>
         )}
       </div>
+      {!loading && messages.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-2 border-t border-gray-200 text-xs text-gray-600">
+          <span>
+            {total > 0 ? `${page * pageSize + 1}-${Math.min((page + 1) * pageSize, total)} of ${total}` : `${messages.length} messages`}
+          </span>
+          <div className="flex items-center gap-2">
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="text-xs border border-gray-300 rounded px-1 py-0.5 cursor-pointer"
+            >
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={200}>200</option>
+            </select>
+            <button
+              disabled={page <= 0}
+              onClick={() => setPage(page - 1)}
+              className="px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              Prev
+            </button>
+            <button
+              disabled={(page + 1) * pageSize >= total}
+              onClick={() => setPage(page + 1)}
+              className="px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
