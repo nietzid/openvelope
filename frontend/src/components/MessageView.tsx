@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import PostalMime, { type Address, type Mailbox } from 'postal-mime'
 import { useMailboxStore } from '../stores/mailboxStore'
-import { getMessage } from '../services/messages'
-import type { MessageSummary } from '../types'
+import { getMessage, listAttachments, downloadAttachment } from '../services/messages'
+import type { AttachmentInfo, MessageSummary } from '../types'
 
 interface ParsedEmail {
   from: string
@@ -33,6 +33,12 @@ function formatAddress(addr: Address | undefined): string {
 function formatAddressList(list: Address[] | undefined): string {
   if (!list || list.length === 0) return ''
   return list.map(formatAddress).join(', ')
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
 function formatDate(iso: string): string {
@@ -78,17 +84,28 @@ interface MessageBodyProps {
   uid: number
   summary: MessageSummary | undefined
   onLoad: (raw: string | null) => void
+  onReply?: (folder: string, uid: number) => void
+  onForward?: (folder: string, uid: number) => void
 }
 
-function MessageBody({ folder, uid, summary, onLoad }: MessageBodyProps) {
+function MessageBody({ folder, uid, summary, onLoad, onReply, onForward }: MessageBodyProps) {
   const [parsed, setParsed] = useState<ParsedEmail | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [attachments, setAttachments] = useState<AttachmentInfo[]>([])
 
   useEffect(() => {
     let cancelled = false
     onLoad(null)
 
     void (async () => {
+      // Load attachments in parallel
+      listAttachments(folder, uid)
+        .then((atts) => {
+          if (!cancelled) setAttachments(atts)
+        })
+        .catch(() => {
+          if (!cancelled) setAttachments([])
+        })
       let rfc822: string
       try {
         rfc822 = await getMessage(folder, uid)
@@ -142,6 +159,20 @@ function MessageBody({ folder, uid, summary, onLoad }: MessageBodyProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folder, uid])
 
+  const handleDownload = async (att: AttachmentInfo) => {
+    try {
+      const blob = await downloadAttachment(folder, uid, att.part_id)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = att.filename
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to download attachment', err)
+    }
+  }
+
   if (error) {
     return (
       <section className="flex-1 bg-white flex flex-col min-w-0">
@@ -194,6 +225,47 @@ function MessageBody({ folder, uid, summary, onLoad }: MessageBodyProps) {
             </div>
           )}
         </dl>
+        <div className="flex gap-2 mt-3">
+          {onReply && (
+            <button
+              type="button"
+              onClick={() => onReply(folder, uid)}
+              className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 cursor-pointer"
+            >
+              Reply
+            </button>
+          )}
+          {onForward && (
+            <button
+              type="button"
+              onClick={() => onForward(folder, uid)}
+              className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 cursor-pointer"
+            >
+              Forward
+            </button>
+          )}
+        </div>
+        {attachments.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <p className="text-xs text-gray-500 mb-1">
+              Attachments ({attachments.length})
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {attachments.map((att) => (
+                <button
+                  key={att.part_id}
+                  type="button"
+                  onClick={() => handleDownload(att)}
+                  className="flex items-center gap-1 px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 cursor-pointer"
+                >
+                  <span>📎</span>
+                  <span>{att.filename}</span>
+                  <span className="text-gray-400">({formatSize(att.size)})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </header>
       <div className="flex-1 overflow-y-auto p-6 bg-white text-black">
         {parsed.html ? (
@@ -211,7 +283,12 @@ function MessageBody({ folder, uid, summary, onLoad }: MessageBodyProps) {
   )
 }
 
-function MessageView() {
+interface MessageViewProps {
+  onReply?: (folder: string, uid: number) => void
+  onForward?: (folder: string, uid: number) => void
+}
+
+function MessageView({ onReply, onForward }: MessageViewProps) {
   const currentFolder = useMailboxStore((state) => state.currentFolder)
   const selectedUID = useMailboxStore((state) => state.selectedUID)
   const setCurrentMessage = useMailboxStore((state) => state.setCurrentMessage)
@@ -236,6 +313,8 @@ function MessageView() {
       uid={selectedUID}
       summary={summary}
       onLoad={setCurrentMessage}
+      onReply={onReply}
+      onForward={onForward}
     />
   )
 }

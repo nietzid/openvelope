@@ -2,15 +2,34 @@ import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHand
 import type { Editor } from '@tiptap/react'
 
 const TipTapEditor = lazy(() => import('./TipTapEditor'))
-import { sendEmail } from '../services/compose'
+import { sendEmail, uploadAttachment } from '../services/compose'
+import type { AttachmentUpload } from '../types'
+
+export interface ReplyData {
+  to: string
+  subject: string
+  body: string
+  inReplyTo: string
+  references: string
+}
+
+export interface ForwardData {
+  subject: string
+  body: string
+}
 
 export interface ComposePanelHandle {
   open: () => void
   close: () => void
+  openReply: (data: ReplyData) => void
+  openForward: (data: ForwardData) => void
 }
+
+type ComposeMode = 'new' | 'reply' | 'forward'
 
 const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref) {
   const [isOpen, setIsOpen] = useState(false)
+  const [mode, setMode] = useState<ComposeMode>('new')
   const [to, setTo] = useState('')
   const [cc, setCc] = useState('')
   const [showCc, setShowCc] = useState(false)
@@ -18,14 +37,47 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
   const [body, setBody] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [inReplyTo, setInReplyTo] = useState('')
+  const [references, setReferences] = useState('')
+  const [attachments, setAttachments] = useState<AttachmentUpload[]>([])
+  const [uploading, setUploading] = useState(false)
 
   const editorRef = useRef<Editor | null>(null)
 
   useImperativeHandle(
     ref,
     () => ({
-      open: () => setIsOpen(true),
+      open: () => {
+        setMode('new')
+        setIsOpen(true)
+      },
       close: () => setIsOpen(false),
+      openReply: (data: ReplyData) => {
+        setMode('reply')
+        setTo(data.to)
+        const replySubject = data.subject.toLowerCase().startsWith('re:')
+          ? data.subject
+          : `Re: ${data.subject}`
+        setSubject(replySubject)
+        const replyBody = `<blockquote style="border-left: 2px solid #ccc; padding-left: 10px; margin-left: 5px; color: #666;">${data.body}</blockquote>`
+        setBody(replyBody)
+        setInReplyTo(data.inReplyTo)
+        setReferences(data.references)
+        setIsOpen(true)
+      },
+      openForward: (data: ForwardData) => {
+        setMode('forward')
+        setTo('')
+        const fwdSubject = data.subject.toLowerCase().startsWith('fwd:')
+          ? data.subject
+          : `Fwd: ${data.subject}`
+        setSubject(fwdSubject)
+        const fwdBody = `<br><br><div style="border-top: 1px solid #ccc; padding-top: 10px; margin-top: 10px;"><p style="color: #666;">---------- Forwarded message ----------</p><p style="color: #666;">Subject: ${data.subject}</p></div>${data.body}`
+        setBody(fwdBody)
+        setInReplyTo('')
+        setReferences('')
+        setIsOpen(true)
+      },
     }),
     []
   )
@@ -38,9 +90,9 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
     setBody(html)
   }, [])
 
-  // Reset form when the panel opens fresh
+  // Reset form when the panel opens fresh (only for 'new' mode)
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && mode === 'new') {
       setTo('')
       setCc('')
       setShowCc(false)
@@ -48,19 +100,33 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
       setBody('')
       setError(null)
       setIsSending(false)
+      setInReplyTo('')
+      setReferences('')
       // clear editor content on next tick (after editor mounts)
       const t = setTimeout(() => {
         editorRef.current?.commands.setContent('')
       }, 0)
       return () => clearTimeout(t)
     }
+    if (isOpen && (mode === 'reply' || mode === 'forward')) {
+      setError(null)
+      setIsSending(false)
+      // Set editor content for reply/forward on next tick
+      const t = setTimeout(() => {
+        editorRef.current?.commands.setContent(body)
+      }, 0)
+      return () => clearTimeout(t)
+    }
     return undefined
-  }, [isOpen])
+  }, [isOpen, mode])
 
   const handleOpen = useCallback(() => setIsOpen(true), [])
   const handleClose = useCallback(() => {
     setIsOpen(false)
     setError(null)
+    setMode('new')
+    setInReplyTo('')
+    setReferences('')
   }, [])
 
   const parseEmails = (raw: string): string[] =>
@@ -89,8 +155,12 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
         subject: subject.trim(),
         body,
         is_html: true,
+        in_reply_to: inReplyTo || undefined,
+        references: references ? references.split(/\s+/).filter(Boolean) : undefined,
+        attachments: attachments.length > 0 ? attachments : undefined,
       })
       setIsOpen(false)
+      setMode('new')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to send email'
       setError(message)
@@ -111,6 +181,38 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
     )
   }
 
+  const dialogTitle = mode === 'reply' ? 'Reply' : mode === 'forward' ? 'Forward' : 'New Message'
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    setUploading(true)
+    try {
+      const uploaded: AttachmentUpload[] = []
+      for (const file of Array.from(files)) {
+        const data = await uploadAttachment(file)
+        uploaded.push(data)
+      }
+      setAttachments((prev) => [...prev, ...uploaded])
+    } catch (err) {
+      console.error('Failed to upload attachment', err)
+      setError(err instanceof Error ? err.message : 'Failed to upload attachment')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const formatSize = (bytes: number): string => {
+    if (bytes < 1024) return bytes + ' B'
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center pointer-events-none">
       <div
@@ -120,11 +222,11 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
       />
       <div
         role="dialog"
-        aria-label="New Message"
+        aria-label={dialogTitle}
         className="relative w-full max-w-3xl mx-4 mb-4 bg-white border border-gray-300 shadow-2xl flex flex-col max-h-[90vh] pointer-events-auto"
       >
         <header className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b border-gray-300">
-          <h2 className="text-sm font-semibold text-black">New Message</h2>
+          <h2 className="text-sm font-semibold text-black">{dialogTitle}</h2>
           <button
             type="button"
             onClick={handleClose}
@@ -199,6 +301,28 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
           </div>
         </div>
 
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1 px-3 py-2 border-t border-gray-200 bg-gray-50">
+            {attachments.map((att, i) => (
+              <span
+                key={i}
+                className="flex items-center gap-1 px-2 py-0.5 text-xs bg-white border border-gray-300 rounded"
+              >
+                <span>📎 {att.filename}</span>
+                <span className="text-gray-400">({formatSize(att.size)})</span>
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(i)}
+                  className="ml-1 text-gray-500 hover:text-red-500 cursor-pointer"
+                  aria-label={`Remove ${att.filename}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
         {error && (
           <div className="px-4 py-2 text-sm text-red-600 border-t border-gray-200 bg-red-50">
             {error}
@@ -206,14 +330,26 @@ const ComposePanel = forwardRef<ComposePanelHandle>(function ComposePanel(_, ref
         )}
 
         <footer className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-white">
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={isSending}
-            className="bg-black text-white px-5 py-2 text-sm font-medium hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed cursor-pointer"
-          >
-            {isSending ? 'Sending…' : 'Send'}
-          </button>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 px-3 py-2 text-sm text-gray-600 hover:text-black cursor-pointer">
+              <span>📎 Attach</span>
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+                disabled={uploading}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={isSending || uploading}
+              className="bg-black text-white px-5 py-2 text-sm font-medium hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {isSending ? 'Sending…' : uploading ? 'Uploading…' : 'Send'}
+            </button>
+          </div>
           <button
             type="button"
             onClick={handleClose}

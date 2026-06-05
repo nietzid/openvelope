@@ -41,6 +41,7 @@ export interface SendEmailRequest {
   is_html: boolean;
   in_reply_to?: string;
   references?: string[];
+  attachments?: AttachmentUpload[];
 }
 
 export interface SearchQuery {
@@ -72,4 +73,31 @@ export interface MeResponse {
   email: string;
 }
 
+export interface MessageHeaders {
+  uid: number;
+  from: string;
+  to: string;
+  cc: string;
+  subject: string;
+  date: string;
+  message_id: string;
+  in_reply_to: string;
+  references: string;
+  flags: MessageFlags;
+}
+
 export type MessageFlagName = keyof MessageFlags;
+
+export interface AttachmentInfo {
+  part_id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+}
+
+export interface AttachmentUpload {
+  filename: string;
+  content_type: string;
+  content: string;
+  size: number;
+}

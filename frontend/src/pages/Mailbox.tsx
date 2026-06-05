@@ -6,6 +6,8 @@ import MessageView from '../components/MessageView'
 import ComposePanel, { type ComposePanelHandle } from '../components/ComposePanel'
 import { useAuthStore } from '../stores/authStore'
 import { logout as logoutRequest } from '../services/auth'
+import { useMailboxStore } from '../stores/mailboxStore'
+import { getMessageHeaders } from '../services/messages'
 import { useMailboxUpdates } from '../hooks/useMailboxUpdates'
 
 function Mailbox() {
@@ -13,6 +15,7 @@ function Mailbox() {
   const email = useAuthStore((state) => state.email)
   const clearAuth = useAuthStore((state) => state.clearAuth)
   const composeRef = useRef<ComposePanelHandle>(null)
+  const currentMessage = useMailboxStore((state) => state.currentMessage)
 
   useMailboxUpdates()
 
@@ -24,6 +27,36 @@ function Mailbox() {
     }
     clearAuth()
     navigate('/login')
+  }
+
+  const handleReply = async (folder: string, uid: number) => {
+    try {
+      const headers = await getMessageHeaders(folder, uid)
+      const references = headers.references
+        ? `${headers.references} ${headers.message_id}`.trim()
+        : headers.message_id
+      composeRef.current?.openReply({
+        to: headers.from,
+        subject: headers.subject,
+        body: currentMessage ?? '',
+        inReplyTo: headers.message_id,
+        references,
+      })
+    } catch (err) {
+      console.error('Failed to load message headers for reply', err)
+    }
+  }
+
+  const handleForward = async (folder: string, uid: number) => {
+    try {
+      const headers = await getMessageHeaders(folder, uid)
+      composeRef.current?.openForward({
+        subject: headers.subject,
+        body: currentMessage ?? '',
+      })
+    } catch (err) {
+      console.error('Failed to load message headers for forward', err)
+    }
   }
 
   return (
@@ -41,7 +74,7 @@ function Mailbox() {
       <div className="flex flex-1 min-h-0">
         <Sidebar onCompose={() => composeRef.current?.open()} />
         <MessageList />
-        <MessageView />
+        <MessageView onReply={handleReply} onForward={handleForward} />
       </div>
       <ComposePanel ref={composeRef} />
     </div>

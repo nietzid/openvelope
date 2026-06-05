@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useMailboxStore } from '../stores/mailboxStore'
-import { listMessages } from '../services/messages'
+import { listMessages, batchOperation } from '../services/messages'
 import type { MessageSummary } from '../types'
 
 function formatDate(iso: string): string {
@@ -40,11 +40,15 @@ function MessageRow({
   msg,
   isSelected,
   onSelect,
+  isBatchSelected,
+  onBatchToggle,
   style,
 }: {
   msg: MessageSummary
   isSelected: boolean
   onSelect: (uid: number) => void
+  isBatchSelected: boolean
+  onBatchToggle: (uid: number) => void
   style?: CSSProperties
 }) {
   const isUnread = !msg.flags.seen
@@ -58,6 +62,13 @@ function MessageRow({
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0 flex-1">
+          <input
+            type="checkbox"
+            checked={isBatchSelected}
+            onChange={() => onBatchToggle(msg.uid)}
+            onClick={(e) => e.stopPropagation()}
+            className="mr-2 cursor-pointer"
+          />
           {isUnread && (
             <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
           )}
@@ -87,6 +98,10 @@ function MessageList() {
   const setMessages = useMailboxStore((state) => state.setMessages)
   const selectedUID = useMailboxStore((state) => state.selectedUID)
   const setSelectedUID = useMailboxStore((state) => state.setSelectedUID)
+  const selectedUIDs = useMailboxStore((state) => state.selectedUIDs)
+  const toggleUID = useMailboxStore((state) => state.toggleUID)
+  const clearSelection = useMailboxStore((state) => state.clearSelection)
+  const selectAll = useMailboxStore((state) => state.selectAll)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -115,6 +130,30 @@ function MessageList() {
     }
   }, [currentFolder, setMessages])
 
+  const handleMarkRead = async () => {
+    await batchOperation(currentFolder, Array.from(selectedUIDs), 'mark_read')
+    setMessages(messages.map(m => selectedUIDs.has(m.uid) ? { ...m, flags: { ...m.flags, seen: true } } : m))
+    clearSelection()
+  }
+
+  const handleMarkUnread = async () => {
+    await batchOperation(currentFolder, Array.from(selectedUIDs), 'mark_unread')
+    setMessages(messages.map(m => selectedUIDs.has(m.uid) ? { ...m, flags: { ...m.flags, seen: false } } : m))
+    clearSelection()
+  }
+
+  const handleFlag = async () => {
+    await batchOperation(currentFolder, Array.from(selectedUIDs), 'flag')
+    setMessages(messages.map(m => selectedUIDs.has(m.uid) ? { ...m, flags: { ...m.flags, flagged: true } } : m))
+    clearSelection()
+  }
+
+  const handleDelete = async () => {
+    await batchOperation(currentFolder, Array.from(selectedUIDs), 'delete')
+    setMessages(messages.filter(m => !selectedUIDs.has(m.uid)))
+    clearSelection()
+  }
+
   const virtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: () => parentRef.current,
@@ -124,9 +163,31 @@ function MessageList() {
 
   return (
     <section className="w-[400px] flex-shrink-0 border-r border-gray-200 bg-white flex flex-col">
-      <header className="text-lg font-semibold text-black px-4 py-3 border-b border-gray-200">
-        {currentFolder}
+      <header className="flex items-center gap-2 px-4 py-3 border-b border-gray-200">
+        <input
+          type="checkbox"
+          checked={selectedUIDs.size === messages.length && messages.length > 0}
+          onChange={() => {
+            if (selectedUIDs.size === messages.length) {
+              clearSelection()
+            } else {
+              selectAll(messages.map(m => m.uid))
+            }
+          }}
+          className="cursor-pointer"
+        />
+        <span className="text-lg font-semibold text-black">{currentFolder}</span>
       </header>
+      {selectedUIDs.size > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 bg-gray-50">
+          <span className="text-xs text-gray-600">{selectedUIDs.size} selected</span>
+          <button onClick={handleMarkRead} className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-100">Mark read</button>
+          <button onClick={handleMarkUnread} className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-100">Mark unread</button>
+          <button onClick={handleFlag} className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-100">Flag</button>
+          <button onClick={handleDelete} className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 text-red-600">Delete</button>
+          <button onClick={clearSelection} className="text-xs px-2 py-1 text-gray-500 hover:text-black">Clear</button>
+        </div>
+      )}
       <div ref={parentRef} className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="p-4 text-gray-500 text-sm">Loading...</div>
@@ -150,6 +211,8 @@ function MessageList() {
                   msg={msg}
                   isSelected={selectedUID === msg.uid}
                   onSelect={setSelectedUID}
+                  isBatchSelected={selectedUIDs.has(msg.uid)}
+                  onBatchToggle={toggleUID}
                   style={{
                     height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`,

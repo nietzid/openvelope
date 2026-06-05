@@ -1,6 +1,8 @@
 import { api } from './api'
 import type {
+  AttachmentInfo,
   MessageFlagName,
+  MessageHeaders,
   MessageListResponse,
   MessageSummary,
 } from '../types'
@@ -48,5 +50,41 @@ export async function moveMessage(
   })
 }
 
+export async function batchOperation(
+  folder: string,
+  uids: number[],
+  action: string,
+  destFolder?: string,
+): Promise<void> {
+  await api.post('/messages/batch', {
+    folder,
+    uids,
+    action,
+    dest_folder: destFolder,
+  })
+}
+
 // Re-export for convenience to consumers that need the type alongside the call.
 export type { MessageSummary }
+
+export async function getMessageHeaders(folder: string, uid: number): Promise<MessageHeaders> {
+  const { data } = await api.get<MessageHeaders>(`/messages/${uid}/headers`, {
+    params: { folder },
+  })
+  return data
+}
+
+export async function listAttachments(folder: string, uid: number): Promise<AttachmentInfo[]> {
+  const { data } = await api.get<{ attachments: AttachmentInfo[] }>(`/messages/${uid}/attachments`, {
+    params: { folder },
+  })
+  return data.attachments ?? []
+}
+
+export async function downloadAttachment(folder: string, uid: number, partId: string): Promise<Blob> {
+  const response = await api.get(`/messages/${uid}/attachments/${partId}`, {
+    params: { folder },
+    responseType: 'blob',
+  })
+  return response.data
+}
