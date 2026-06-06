@@ -1,41 +1,54 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { WebSocketService } from '../services/websocket'
 import { useAuthStore } from '../stores/authStore'
 
-function buildWsUrl(token: string): string {
+function getWsBaseUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`
+  return `${protocol}//${window.location.host}/ws`
 }
 
+/**
+ * Manages the WebSocket lifecycle based on auth state.
+ * - Connects when an access token is available
+ * - Disconnects on logout (token cleared)
+ * - Listens for `ws:manual-retry` custom events from the ConnectionStatus component
+ * - Exposes the service instance ref for use by useMailboxUpdates
+ */
 export function useWebSocket() {
   const accessToken = useAuthStore((state) => state.accessToken)
-  const tokenRef = useRef<string | null>(accessToken)
+  const serviceRef = useRef<WebSocketService | null>(null)
 
-  // Keep token ref up to date so connect() can read the latest value
-  // (avoids stale closure issues without forcing a reconnect on token change)
+  // Connect/disconnect based on auth token
   useEffect(() => {
-    tokenRef.current = accessToken
+    if (accessToken) {
+      const ws = new WebSocketService(getWsBaseUrl(), accessToken)
+      serviceRef.current = ws
+      ws.connect()
+
+      return () => {
+        ws.disconnect()
+        serviceRef.current = null
+      }
+    } else {
+      // Token cleared (logout) — disconnect if still connected
+      if (serviceRef.current) {
+        serviceRef.current.disconnect()
+        serviceRef.current = null
+      }
+    }
   }, [accessToken])
 
-  const service = useMemo(() => {
-    if (!accessToken) return null
-    return new WebSocketService(buildWsUrl(accessToken), accessToken)
-  }, [accessToken])
-
+  // Listen for manual retry events dispatched by the ConnectionStatus component
   useEffect(() => {
-    if (!service) return
-    service.connect()
+    function handleManualRetry() {
+      serviceRef.current?.manualRetry()
+    }
+
+    window.addEventListener('ws:manual-retry', handleManualRetry)
     return () => {
-      service.disconnect()
+      window.removeEventListener('ws:manual-retry', handleManualRetry)
     }
-  }, [service])
+  }, [])
 
-  const on = useMemo(() => {
-    return (event: string, callback: (data: any) => void): (() => void) => {
-      if (!service) return () => {}
-      return service.on(event, callback)
-    }
-  }, [service])
-
-  return { on }
+  return serviceRef
 }

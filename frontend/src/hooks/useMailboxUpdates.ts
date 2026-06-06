@@ -1,63 +1,48 @@
-import { useEffect } from 'react'
-import { useWebSocket } from './useWebSocket'
-import { useMailboxStore } from '../stores/mailboxStore'
-import { listMessages } from '../services/messages'
+import { useEffect, type RefObject } from 'react'
+import type { WebSocketService } from '../services/websocket'
+import {
+  handleWebSocketEvent,
+  type NewMessageEvent,
+  type FlagsChangedEvent,
+  type MessageDeletedEvent,
+} from '../lib/wsEventHandlers'
 
-const PAGE = 1
-const PAGE_SIZE = 50
-
-interface NewMessageData {
-  folder: string
-  uid: number
-  from?: string
-  subject?: string
-}
-
-interface FlagsChangedData {
-  folder: string
-  uid: number
-  flags: Record<string, boolean>
-}
-
-interface MessageDeletedData {
-  folder: string
-  uid: number
-}
-
-export function useMailboxUpdates() {
-  const { on } = useWebSocket()
-
+/**
+ * Subscribes to WebSocket mailbox events and dispatches store mutations.
+ * Handles: new_message, flags_changed, message_deleted
+ *
+ * @param serviceRef - A ref to the WebSocketService instance from useWebSocket
+ */
+export function useMailboxUpdates(serviceRef: RefObject<WebSocketService | null>) {
   useEffect(() => {
-    const offNew = on('new_message', (data: NewMessageData) => {
-      if (!data || typeof data.folder !== 'string') return
-      const { currentFolder, setMessages } = useMailboxStore.getState()
-      if (data.folder !== currentFolder) return
-      listMessages(currentFolder, PAGE, PAGE_SIZE)
-        .then((res) => setMessages(res.messages))
-        .catch((err) => console.error('[useMailboxUpdates] refetch failed', err))
+    const service = serviceRef.current
+    if (!service) return
+
+    const unsubNew = service.on('new_message', (data: unknown) => {
+      handleWebSocketEvent({
+        event: 'new_message',
+        data: data as NewMessageEvent,
+      })
     })
 
-    const offFlags = on('flags_changed', (data: FlagsChangedData) => {
-      if (!data || typeof data.folder !== 'string' || typeof data.uid !== 'number' || !data.flags) return
-      const { currentFolder, messages, setMessages } = useMailboxStore.getState()
-      if (data.folder !== currentFolder) return
-      const updated = messages.map((m) =>
-        m.uid === data.uid ? { ...m, flags: { ...m.flags, ...data.flags } } : m,
-      )
-      setMessages(updated)
+    const unsubFlags = service.on('flags_changed', (data: unknown) => {
+      handleWebSocketEvent({
+        event: 'flags_changed',
+        data: data as FlagsChangedEvent,
+      })
     })
 
-    const offDeleted = on('message_deleted', (data: MessageDeletedData) => {
-      if (!data || typeof data.folder !== 'string' || typeof data.uid !== 'number') return
-      const { currentFolder, messages, setMessages } = useMailboxStore.getState()
-      if (data.folder !== currentFolder) return
-      setMessages(messages.filter((m) => m.uid !== data.uid))
+    const unsubDeleted = service.on('message_deleted', (data: unknown) => {
+      handleWebSocketEvent({
+        event: 'message_deleted',
+        data: data as MessageDeletedEvent,
+      })
     })
 
     return () => {
-      offNew()
-      offFlags()
-      offDeleted()
+      unsubNew()
+      unsubFlags()
+      unsubDeleted()
     }
-  }, [on])
+  }, [serviceRef.current])
 }

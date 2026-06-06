@@ -8,6 +8,7 @@ import { useAuthStore } from '../stores/authStore'
 import { logout as logoutRequest } from '../services/auth'
 import { useMailboxStore } from '../stores/mailboxStore'
 import { getMessageHeaders } from '../services/messages'
+import { useWebSocket } from '../hooks/useWebSocket'
 import { useMailboxUpdates } from '../hooks/useMailboxUpdates'
 
 function Mailbox() {
@@ -17,7 +18,8 @@ function Mailbox() {
   const composeRef = useRef<ComposePanelHandle>(null)
   const currentMessageText = useMailboxStore((state) => state.currentMessageText)
 
-  useMailboxUpdates()
+  const wsServiceRef = useWebSocket()
+  useMailboxUpdates(wsServiceRef)
 
   const handleLogout = async () => {
     try {
