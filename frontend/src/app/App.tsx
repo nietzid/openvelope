@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { useNotifications } from '../hooks/useNotifications'
 import { Toaster } from '../components/ui/sonner'
 
 const Login = lazy(() => import('./routes/Login'))
@@ -11,6 +12,8 @@ const Contacts = lazy(() => import('./routes/Contacts'))
 /** Route guard — redirects to /login if no auth token */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const accessToken = useAuthStore((s) => s.accessToken)
+  // Initialize notification system for authenticated users
+  useNotifications()
   if (!accessToken) {
     return <Navigate to="/login" replace />
   }
