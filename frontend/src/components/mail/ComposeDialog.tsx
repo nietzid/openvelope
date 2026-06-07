@@ -30,6 +30,15 @@ function prefixSubject(prefix: string, subject: string): string {
 }
 
 /**
+ * Escapes HTML special characters to prevent XSS.
+ */
+function escapeHtml(str: string): string {
+  const div = document.createElement('div')
+  div.textContent = str
+  return div.innerHTML
+}
+
+/**
  * Formats a date string for reply attribution.
  */
 function formatDateAttribution(dateStr: string): string {
@@ -50,7 +59,7 @@ function formatDateAttribution(dateStr: string): string {
  * Attribution: "On [date], [sender] wrote:" followed by blockquoted original body.
  */
 function buildReplyBody(originalBody: string, from?: string, date?: string): string {
-  const sender = from || 'the sender'
+  const sender = from ? escapeHtml(from) : 'the sender'
   const dateStr = date ? formatDateAttribution(date) : 'an earlier date'
   const attribution = `<p>On ${dateStr}, ${sender} wrote:</p>`
   return `<br/>${attribution}<blockquote data-reply-quote="true" contenteditable="false" style="border-left: 3px solid var(--color-border, #ccc); padding-left: 12px; margin: 8px 0 0 0; color: var(--color-text-secondary, #666);">${originalBody}</blockquote>`
@@ -64,10 +73,10 @@ function buildForwardBody(originalBody: string, from?: string, date?: string, su
   const dateStr = date ? formatDateAttribution(date) : ''
   const header = [
     '---------- Forwarded message ---------',
-    from ? `From: ${from}` : '',
+    from ? `From: ${escapeHtml(from)}` : '',
     dateStr ? `Date: ${dateStr}` : '',
-    subject ? `Subject: ${subject}` : '',
-    to ? `To: ${to}` : '',
+    subject ? `Subject: ${escapeHtml(subject)}` : '',
+    to ? `To: ${escapeHtml(to)}` : '',
   ].filter(Boolean).join('<br/>')
   return `<br/><div data-forward-header="true" contenteditable="false" style="color: var(--color-text-secondary, #666); font-size: 0.9em;">${header}</div><br/>${originalBody}`
 }
