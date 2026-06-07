@@ -1,10 +1,13 @@
-import { useState, useCallback, useRef, Suspense, lazy } from 'react'
+import { useState, useCallback, useRef, Suspense, lazy, useEffect } from 'react'
 import { Dialog } from '../primitives/Dialog'
 import { Button } from '../primitives/Button'
 import { useUIStore } from '../../stores/uiStore'
 import { sendEmail, uploadAttachment } from '../../services/compose'
+import { listIdentities, listSignatures } from '../../services/settings'
+import { autocompleteContacts } from '../../services/contacts'
 import { formatSize } from '../../lib/format'
-import type { AttachmentUpload } from '../../types'
+import { easing, duration } from '../../lib/motion'
+import type { AttachmentUpload, ContactAutocompleteItem, Identity, Signature } from '../../types'
 
 // Lazy-load TipTap editor for code-splitting
 const TipTapEditor = lazy(() => import('../TipTapEditor'))
@@ -82,6 +85,24 @@ export function ComposeDialog() {
   const [attachError, setAttachError] = useState<string | null>(null)
   const [editorLoadError, setEditorLoadError] = useState(false)
 
+  // Identity state
+  const [identities, setIdentities] = useState<Identity[]>([])
+  const [selectedIdentityId, setSelectedIdentityId] = useState<number | null>(null)
+  const [identitiesLoading, setIdentitiesLoading] = useState(false)
+
+  // Signature state
+  const [signatures, setSignatures] = useState<Signature[]>([])
+
+  // Contact autocomplete state
+  const [autocompleteResults, setAutocompleteResults] = useState<ContactAutocompleteItem[]>([])
+  const [autocompleteOpen, setAutocompleteOpen] = useState(false)
+  const [autocompleteLoading, setAutocompleteLoading] = useState(false)
+  const [autocompleteActiveIndex, setAutocompleteActiveIndex] = useState(-1)
+  const toInputRef = useRef<HTMLInputElement>(null)
+  const autocompleteRef = useRef<HTMLDivElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const initializedRef = useRef<string | null>(null)
 
@@ -111,6 +132,46 @@ export function ComposeDialog() {
     setAttachError(null)
     setEditorLoadError(false)
   }
+
+  // Fetch identities and signatures when compose dialog opens
+  useEffect(() => {
+    if (!composeOpen) return
+    let cancelled = false
+    setIdentitiesLoading(true)
+    Promise.all([
+      listIdentities().catch(() => []),
+      listSignatures().catch(() => []),
+    ]).then(([identityData, signatureData]) => {
+      if (cancelled) return
+      const list = Array.isArray(identityData) ? identityData : []
+      setIdentities(list)
+      const defaultIdentity = list.find((i: Identity) => i.is_default)
+      setSelectedIdentityId(defaultIdentity?.id ?? list[0]?.id ?? null)
+
+      const sigList = Array.isArray(signatureData) ? signatureData : []
+      setSignatures(sigList)
+
+      // For new messages, append default signature if available
+      if (composeMode === 'new' && defaultIdentity?.signature_id) {
+        const defaultSig = sigList.find((s: Signature) => s.id === defaultIdentity.signature_id && s.content)
+        if (defaultSig) {
+          setBodyHtml((prev) => {
+            if (prev.trim()) return prev
+            return '<br/><br/>' + defaultSig.content
+          })
+        }
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setIdentities([])
+        setSelectedIdentityId(null)
+        setSignatures([])
+      }
+    }).finally(() => {
+      if (!cancelled) setIdentitiesLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [composeOpen, composeMode])
 
   // Reset state when dialog closes
   const handleClose = useCallback(() => {
@@ -188,6 +249,116 @@ export function ComposeDialog() {
     setAttachments((prev) => prev.filter((a) => a.file !== file))
   }, [])
 
+  // Contact autocomplete — debounced search
+  const handleToChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setTo(value)
+    setAutocompleteActiveIndex(-1)
+
+    // Clear previous debounce
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    // Extract the last segment after comma for search query
+    const segments = value.split(',').map((s) => s.trim())
+    const lastSegment = segments[segments.length - 1] ?? ''
+
+    if (lastSegment.length < 2) {
+      setAutocompleteResults([])
+      setAutocompleteOpen(false)
+      return
+    }
+
+    debounceRef.current = setTimeout(() => {
+      setAutocompleteLoading(true)
+      setAutocompleteOpen(true)
+      autocompleteContacts(lastSegment)
+        .then((results) => {
+          setAutocompleteResults(Array.isArray(results) ? results : [])
+        })
+        .catch(() => {
+          setAutocompleteResults([])
+          setAutocompleteOpen(false)
+        })
+        .finally(() => setAutocompleteLoading(false))
+    }, 300)
+  }, [])
+
+  // Select an autocomplete contact
+  const selectContact = useCallback((contact: ContactAutocompleteItem) => {
+    const segments = to.split(',').map((s) => s.trim())
+    // Replace last segment with the selected contact
+    segments[segments.length - 1] = `${contact.display_name} <${contact.email_addr}>`
+    setTo(segments.join(', '))
+    setAutocompleteResults([])
+    setAutocompleteOpen(false)
+    setAutocompleteActiveIndex(-1)
+    toInputRef.current?.focus()
+  }, [to])
+
+  // Keyboard navigation for autocomplete
+  const handleToKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!autocompleteOpen || autocompleteResults.length === 0) return
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setAutocompleteActiveIndex((prev) =>
+          prev < autocompleteResults.length - 1 ? prev + 1 : 0
+        )
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setAutocompleteActiveIndex((prev) =>
+          prev > 0 ? prev - 1 : autocompleteResults.length - 1
+        )
+        break
+      case 'Enter':
+        if (autocompleteActiveIndex >= 0 && autocompleteActiveIndex < autocompleteResults.length) {
+          e.preventDefault()
+          selectContact(autocompleteResults[autocompleteActiveIndex])
+        }
+        break
+      case 'Escape':
+        e.preventDefault()
+        setAutocompleteOpen(false)
+        setAutocompleteActiveIndex(-1)
+        break
+    }
+  }, [autocompleteOpen, autocompleteResults, autocompleteActiveIndex, selectContact])
+
+  // Close autocomplete on click outside
+  useEffect(() => {
+    if (!autocompleteOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        autocompleteRef.current &&
+        !autocompleteRef.current.contains(e.target as Node) &&
+        toInputRef.current &&
+        !toInputRef.current.contains(e.target as Node)
+      ) {
+        setAutocompleteOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [autocompleteOpen])
+
+  // Close autocomplete on blur (with delay to allow click selection)
+  const handleToBlur = useCallback(() => {
+    blurTimeoutRef.current = setTimeout(() => {
+      setAutocompleteOpen(false)
+      setAutocompleteActiveIndex(-1)
+    }, 200)
+  }, [])
+
+  // Cleanup debounce/blur timers on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current)
+    }
+  }, [])
+
   // Send email
   const handleSend = useCallback(async () => {
     setSendError(null)
@@ -229,7 +400,32 @@ export function ComposeDialog() {
   return (
     <Dialog open={composeOpen} onClose={handleClose} title={dialogTitle} labelId="compose-dialog-title">
       <div className="flex flex-col gap-[var(--space-4)]">
-        {/* To field */}
+        {/* From dropdown (identity selector) */}
+        {identities.length > 0 && (
+          <div className="flex flex-col gap-[var(--space-1)]">
+            <label
+              htmlFor="compose-from"
+              className="text-sm font-medium text-[var(--color-text-secondary)]"
+            >
+              From
+            </label>
+            <select
+              id="compose-from"
+              value={selectedIdentityId ?? ''}
+              onChange={(e) => setSelectedIdentityId(Number(e.target.value))}
+              className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-[var(--space-3)] py-[var(--space-2)] text-sm text-[var(--color-text-primary)] outline-none focus:ring-2 focus:ring-[var(--color-accent)] min-h-[44px]"
+              disabled={sending}
+            >
+              {identities.map((identity) => (
+                <option key={identity.id} value={identity.id}>
+                  {identity.name} &lt;{identity.from_email}&gt;
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* To field with autocomplete */}
         <div className="flex flex-col gap-[var(--space-1)]">
           <label
             htmlFor="compose-to"
@@ -237,15 +433,92 @@ export function ComposeDialog() {
           >
             To
           </label>
-          <input
-            id="compose-to"
-            type="text"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            placeholder="recipient@example.com"
-            className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-[var(--space-3)] py-[var(--space-2)] text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-            disabled={sending}
-          />
+          <div className="relative">
+            <input
+              ref={toInputRef}
+              id="compose-to"
+              type="text"
+              value={to}
+              onChange={handleToChange}
+              onKeyDown={handleToKeyDown}
+              onBlur={handleToBlur}
+              onFocus={() => {
+                if (autocompleteResults.length > 0) setAutocompleteOpen(true)
+              }}
+              placeholder="recipient@example.com"
+              className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-[var(--space-3)] py-[var(--space-2)] text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+              disabled={sending}
+              role="combobox"
+              aria-expanded={autocompleteOpen}
+              aria-controls="compose-to-autocomplete-list"
+              aria-activedescendant={
+                autocompleteActiveIndex >= 0 ? `compose-to-option-${autocompleteActiveIndex}` : undefined
+              }
+              aria-autocomplete="list"
+            />
+            {/* Autocomplete dropdown */}
+            {autocompleteOpen && (
+              <div
+                ref={autocompleteRef}
+                id="compose-to-autocomplete-list"
+                role="listbox"
+                aria-label="Contact suggestions"
+                className="absolute z-50 mt-1 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-md)] overflow-hidden"
+                style={{
+                  animation: `autocomplete-enter ${duration.normal}ms ${easing.outExpo} forwards`,
+                }}
+              >
+                <style>{`
+                  @keyframes autocomplete-enter {
+                    from { opacity: 0; transform: translateY(-4px); }
+                    to { opacity: 1; transform: translateY(0); }
+                  }
+                `}</style>
+                {autocompleteLoading ? (
+                  <div className="flex items-center justify-center gap-2 p-[var(--space-3)] text-sm text-[var(--color-text-secondary)]">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Searching…
+                  </div>
+                ) : autocompleteResults.length === 0 ? (
+                  <div className="p-[var(--space-3)] text-sm text-[var(--color-text-secondary)] text-center">
+                    No contacts found
+                  </div>
+                ) : (
+                  autocompleteResults.map((contact, index) => (
+                    <div
+                      key={contact.id}
+                      id={`compose-to-option-${index}`}
+                      role="option"
+                      aria-selected={index === autocompleteActiveIndex}
+                      className={`flex items-center gap-[var(--space-3)] px-[var(--space-3)] py-[var(--space-2)] cursor-pointer transition-colors ${
+                        index === autocompleteActiveIndex
+                          ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
+                          : 'hover:bg-[var(--color-border)]/50 text-[var(--color-text-primary)]'
+                      }`}
+                      style={{ minHeight: '44px' }}
+                      onMouseDown={(e) => {
+                        // Prevent blur before click registers
+                        e.preventDefault()
+                        selectContact(contact)
+                      }}
+                      onMouseEnter={() => setAutocompleteActiveIndex(index)}
+                    >
+                      <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/10 text-[var(--color-accent)] text-xs font-semibold">
+                        {contact.display_name ? contact.display_name.charAt(0).toUpperCase() : '?'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{contact.display_name}</div>
+                        <div className="text-xs text-[var(--color-text-secondary)] truncate">{contact.email_addr}</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Subject field */}

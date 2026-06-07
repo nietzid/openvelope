@@ -9,6 +9,11 @@ export async function search(query: SearchQuery): Promise<SearchResponse> {
       from: query.from,
       to: query.to,
       subject: query.subject,
+      date_after: query.date_after,
+      date_before: query.date_before,
+      has_attachment: query.has_attachment,
+      page: query.page,
+      page_size: query.page_size,
     },
     paramsSerializer: {
       indexes: null,

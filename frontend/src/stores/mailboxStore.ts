@@ -12,6 +12,12 @@ interface MailboxState {
   page: number
   pageSize: number
   total: number
+  // Search state
+  searchMode: boolean
+  searchQuery: string
+  searchResults: MessageSummary[]
+  searchTotal: number
+  searchLoading: boolean
   setFolders: (folders: Folder[]) => void
   setCurrentFolder: (name: string) => void
   setSelectedUID: (uid: number | null) => void
@@ -19,12 +25,18 @@ interface MailboxState {
   clearSelection: () => void
   selectAll: (uids: number[]) => void
   setMessages: (messages: MessageSummary[]) => void
+  appendMessages: (messages: MessageSummary[]) => void
   setCurrentMessage: (msg: string | null) => void
   setCurrentMessageText: (text: { html: string; text: string } | null) => void
   updateMessageFlags: (uid: number, flags: Partial<MessageSummary['flags']>) => void
   setPage: (page: number) => void
   setPageSize: (size: number) => void
   setTotal: (total: number) => void
+  setSearchMode: (mode: boolean) => void
+  setSearchQuery: (query: string) => void
+  setSearchResults: (results: MessageSummary[], total: number) => void
+  setSearchLoading: (loading: boolean) => void
+  clearSearch: () => void
 }
 
 export const useMailboxStore = create<MailboxState>((set) => ({
@@ -38,6 +50,11 @@ export const useMailboxStore = create<MailboxState>((set) => ({
   page: 0,
   pageSize: 50,
   total: 0,
+  searchMode: false,
+  searchQuery: '',
+  searchResults: [],
+  searchTotal: 0,
+  searchLoading: false,
   setFolders: (folders) => set({ folders }),
   setCurrentFolder: (name) => set({
     currentFolder: name,
@@ -48,6 +65,11 @@ export const useMailboxStore = create<MailboxState>((set) => ({
     currentMessageText: null,
     page: 0,
     total: 0,
+    searchMode: false,
+    searchQuery: '',
+    searchResults: [],
+    searchTotal: 0,
+    searchLoading: false,
   }),
   setSelectedUID: (uid) => set({ selectedUID: uid }),
   toggleUID: (uid) => set((state) => {
@@ -62,6 +84,9 @@ export const useMailboxStore = create<MailboxState>((set) => ({
   clearSelection: () => set({ selectedUIDs: new Set() }),
   selectAll: (uids) => set({ selectedUIDs: new Set(uids) }),
   setMessages: (messages) => set({ messages }),
+  appendMessages: (messages) => set((state) => ({
+    messages: [...state.messages, ...messages],
+  })),
   setCurrentMessage: (msg) => set({ currentMessage: msg }),
   setCurrentMessageText: (text) => set({ currentMessageText: text }),
   updateMessageFlags: (uid, flags) => set((state) => ({
@@ -72,4 +97,15 @@ export const useMailboxStore = create<MailboxState>((set) => ({
   setPage: (page) => set({ page }),
   setPageSize: (pageSize) => set({ pageSize, page: 0 }),
   setTotal: (total) => set({ total }),
+  setSearchMode: (mode) => set({ searchMode: mode }),
+  setSearchQuery: (query) => set({ searchQuery: query }),
+  setSearchResults: (results, total) => set({ searchResults: results, searchTotal: total }),
+  setSearchLoading: (loading) => set({ searchLoading: loading }),
+  clearSearch: () => set({
+    searchMode: false,
+    searchQuery: '',
+    searchResults: [],
+    searchTotal: 0,
+    searchLoading: false,
+  }),
 }))

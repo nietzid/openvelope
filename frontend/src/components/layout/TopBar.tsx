@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { useMailboxStore } from '../../stores/mailboxStore'
+import { useUIStore } from '../../stores/uiStore'
 import { logout } from '../../services/auth'
 import { batchOperation } from '../../services/messages'
 import { Button } from '../primitives/Button'
@@ -17,6 +18,7 @@ export function TopBar() {
   const navigate = useNavigate()
   const email = useAuthStore((s) => s.email)
   const clearAuth = useAuthStore((s) => s.clearAuth)
+  const toggleSearch = useUIStore((s) => s.toggleSearch)
 
   const selectedUIDs = useMailboxStore((s) => s.selectedUIDs)
   const selectedUID = useMailboxStore((s) => s.selectedUID)
@@ -159,6 +161,40 @@ export function TopBar() {
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Search trigger button */}
+      <button
+        type="button"
+        onClick={toggleSearch}
+        aria-label="Open search (Cmd/Ctrl+K)"
+        className={[
+          'flex items-center gap-2',
+          'h-9 min-h-[44px] px-3',
+          'rounded-[var(--radius-md)]',
+          'border border-[var(--color-border)]',
+          'bg-[var(--color-surface)]',
+          'text-sm text-[var(--color-text-secondary)]',
+          'hover:bg-[var(--color-surface-elevated)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-text-secondary)]',
+          'transition-colors duration-[150ms] ease-out',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2',
+        ].join(' ')}
+      >
+        <svg
+          className="h-4 w-4"
+          viewBox="0 0 20 20"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M8.5 3a5.5 5.5 0 0 1 4.383 8.823l4.147 4.147a.75.75 0 0 1-1.06 1.06l-4.147-4.147A5.5 5.5 0 1 1 8.5 3Zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"
+            fill="currentColor"
+          />
+        </svg>
+        <span className="hidden md:inline">Search</span>
+        <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[var(--color-surface-elevated)] text-[var(--text-xs)] text-[var(--color-text-secondary)] border border-[var(--color-border)] ml-1">
+          ⌘K
+        </kbd>
+      </button>
 
       {/* User email + Logout */}
       <span className="text-sm text-[var(--color-text-secondary)] hidden sm:inline truncate max-w-[200px]">

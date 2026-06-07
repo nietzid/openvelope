@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useUIStore } from '../../stores/uiStore'
 import { useMailboxStore } from '../../stores/mailboxStore'
 import { search } from '../../services/search'
+import { easing, duration } from '../../lib/motion'
 import type { MessageSummary } from '../../types'
 
 /** Selector for all focusable elements inside the search overlay */
@@ -89,6 +90,26 @@ export function SearchInterface() {
   const [hasSearched, setHasSearched] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
 
+  // Filter state
+  const [showFilters, setShowFilters] = useState(false)
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
+  const [filterFolder, setFilterFolder] = useState('')
+  const [filterDateBefore, setFilterDateBefore] = useState('')
+  const [filterDateAfter, setFilterDateAfter] = useState('')
+  const [filterHasAttachment, setFilterHasAttachment] = useState(false)
+
+  // Count active filters
+  const activeFilterCount =
+    (filterFrom ? 1 : 0) +
+    (filterTo ? 1 : 0) +
+    (filterFolder ? 1 : 0) +
+    (filterDateBefore ? 1 : 0) +
+    (filterDateAfter ? 1 : 0) +
+    (filterHasAttachment ? 1 : 0)
+
+  const hasActiveFilters = activeFilterCount > 0
+
   const overlayRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
@@ -134,6 +155,13 @@ export function SearchInterface() {
       setError(null)
       setHasSearched(false)
       setActiveIndex(-1)
+      setShowFilters(false)
+      setFilterFrom('')
+      setFilterTo('')
+      setFilterFolder('')
+      setFilterDateBefore('')
+      setFilterDateAfter('')
+      setFilterHasAttachment(false)
       // Return focus to previously focused element
       previousFocusRef.current?.focus()
       previousFocusRef.current = null
@@ -216,7 +244,7 @@ export function SearchInterface() {
 
   // Perform search
   const performSearch = useCallback(async (text: string) => {
-    if (text.trim().length < MIN_CHARS) {
+    if (text.trim().length < MIN_CHARS && !hasActiveFilters) {
       setResults([])
       setHasSearched(false)
       setError(null)
@@ -229,7 +257,15 @@ export function SearchInterface() {
     setActiveIndex(-1)
 
     try {
-      const response = await search({ text: text.trim() })
+      const response = await search({
+        text: text.trim() || undefined,
+        from: filterFrom || undefined,
+        to: filterTo || undefined,
+        folder: filterFolder || undefined,
+        date_after: filterDateAfter || undefined,
+        date_before: filterDateBefore || undefined,
+        has_attachment: filterHasAttachment || undefined,
+      })
       setResults(response.results.slice(0, MAX_RESULTS))
     } catch {
       setError('Search could not be completed. Please try again.')
@@ -237,7 +273,7 @@ export function SearchInterface() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filterFrom, filterTo, filterFolder, filterDateAfter, filterDateBefore, filterHasAttachment, hasActiveFilters])
 
   // Handle input change with debounce
   const handleInputChange = useCallback(
@@ -249,7 +285,7 @@ export function SearchInterface() {
         clearTimeout(debounceRef.current)
       }
 
-      if (value.trim().length < MIN_CHARS) {
+      if (value.trim().length < MIN_CHARS && !hasActiveFilters) {
         setResults([])
         setHasSearched(false)
         setError(null)
@@ -260,7 +296,7 @@ export function SearchInterface() {
         performSearch(value)
       }, DEBOUNCE_MS)
     },
-    [performSearch],
+    [performSearch, hasActiveFilters],
   )
 
   // Cleanup debounce on unmount
@@ -287,6 +323,30 @@ export function SearchInterface() {
   const handleRetry = useCallback(() => {
     performSearch(query)
   }, [performSearch, query])
+
+  // Clear all filters
+  const clearFilters = useCallback(() => {
+    setFilterFrom('')
+    setFilterTo('')
+    setFilterFolder('')
+    setFilterDateBefore('')
+    setFilterDateAfter('')
+    setFilterHasAttachment(false)
+  }, [])
+
+  // Re-run search when filters change (if we already have a query)
+  useEffect(() => {
+    if (hasSearched || hasActiveFilters) {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+      }
+      debounceRef.current = setTimeout(() => {
+        performSearch(query)
+      }, DEBOUNCE_MS)
+    }
+    // Only trigger on filter changes, not on query changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterFrom, filterTo, filterFolder, filterDateAfter, filterDateBefore, filterHasAttachment])
 
   // Keyboard navigation for results
   const handleInputKeyDown = useCallback(
@@ -398,10 +458,227 @@ export function SearchInterface() {
             ].join(' ')}
           />
 
+          {/* Filter toggle button */}
+          <button
+            type="button"
+            onClick={() => setShowFilters((prev) => !prev)}
+            aria-label={`Toggle filters${hasActiveFilters ? ` (${activeFilterCount} active)` : ''}`}
+            aria-pressed={showFilters}
+            className={[
+              'relative flex items-center justify-center w-[44px] h-[44px] -mr-2 rounded-[var(--radius-md)]',
+              'transition-colors duration-[150ms] ease-out',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2',
+              hasActiveFilters
+                ? 'text-[var(--color-accent)] bg-[var(--color-accent)]/10'
+                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface)]',
+            ].join(' ')}
+          >
+            {/* Filter/funnel icon */}
+            <svg
+              className="w-5 h-5"
+              viewBox="0 0 20 20"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M2 4.75A.75.75 0 0 1 2.75 4h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 4.75ZM4.25 8.5a.75.75 0 0 1 .75-.75h10a.75.75 0 0 1 0 1.5H5a.75.75 0 0 1-.75-.75ZM6 12.25a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5a.75.75 0 0 1-.75-.75Z"
+                fill="currentColor"
+              />
+            </svg>
+            {/* Active filter badge */}
+            {hasActiveFilters && (
+              <span
+                className={[
+                  'absolute -top-0.5 -right-0.5',
+                  'min-w-[18px] h-[18px] flex items-center justify-center',
+                  'text-[10px] font-semibold leading-none',
+                  'text-white bg-[var(--color-accent)]',
+                  'rounded-full px-1',
+                ].join(' ')}
+                aria-hidden="true"
+              >
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
           {/* Keyboard shortcut hint */}
           <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-[var(--radius-sm)] bg-[var(--color-surface)] text-[var(--text-xs)] text-[var(--color-text-secondary)] border border-[var(--color-border)]">
             Esc
           </kbd>
+        </div>
+
+        {/* Filter panel */}
+        <div
+          role="region"
+          aria-label="Search filters"
+          className={[
+            'overflow-hidden border-b border-[var(--color-border)]',
+            'transition-[max-height,opacity] ease-out',
+            showFilters
+              ? 'max-h-[300px] opacity-100'
+              : 'max-h-0 opacity-0',
+          ].join(' ')}
+          style={{
+            transitionDuration: `${duration.normal}ms`,
+            transitionTimingFunction: showFilters ? easing.outExpo : easing.inQuad,
+          }}
+        >
+          <div className="px-4 py-3 bg-[var(--color-surface)]">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {/* From */}
+              <label className="flex flex-col gap-1">
+                <span className="text-[var(--text-xs)] font-medium text-[var(--color-text-secondary)]">
+                  From
+                </span>
+                <input
+                  type="text"
+                  value={filterFrom}
+                  onChange={(e) => setFilterFrom(e.target.value)}
+                  placeholder="From"
+                  aria-label="Filter by sender"
+                  className={[
+                    'h-[44px] px-3 rounded-[var(--radius-md)]',
+                    'bg-[var(--color-surface-elevated)] border border-[var(--color-border)]',
+                    'text-[var(--text-sm)] text-[var(--color-text-primary)]',
+                    'placeholder:text-[var(--color-text-secondary)]',
+                    'outline-none',
+                    'focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1',
+                    'transition-[border-color,box-shadow] duration-[150ms] ease-out',
+                  ].join(' ')}
+                />
+              </label>
+
+              {/* To */}
+              <label className="flex flex-col gap-1">
+                <span className="text-[var(--text-xs)] font-medium text-[var(--color-text-secondary)]">
+                  To
+                </span>
+                <input
+                  type="text"
+                  value={filterTo}
+                  onChange={(e) => setFilterTo(e.target.value)}
+                  placeholder="To"
+                  aria-label="Filter by recipient"
+                  className={[
+                    'h-[44px] px-3 rounded-[var(--radius-md)]',
+                    'bg-[var(--color-surface-elevated)] border border-[var(--color-border)]',
+                    'text-[var(--text-sm)] text-[var(--color-text-primary)]',
+                    'placeholder:text-[var(--color-text-secondary)]',
+                    'outline-none',
+                    'focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1',
+                    'transition-[border-color,box-shadow] duration-[150ms] ease-out',
+                  ].join(' ')}
+                />
+              </label>
+
+              {/* Folder */}
+              <label className="flex flex-col gap-1">
+                <span className="text-[var(--text-xs)] font-medium text-[var(--color-text-secondary)]">
+                  Folder
+                </span>
+                <input
+                  type="text"
+                  value={filterFolder}
+                  onChange={(e) => setFilterFolder(e.target.value)}
+                  placeholder="Folder (e.g. INBOX)"
+                  aria-label="Filter by folder"
+                  className={[
+                    'h-[44px] px-3 rounded-[var(--radius-md)]',
+                    'bg-[var(--color-surface-elevated)] border border-[var(--color-border)]',
+                    'text-[var(--text-sm)] text-[var(--color-text-primary)]',
+                    'placeholder:text-[var(--color-text-secondary)]',
+                    'outline-none',
+                    'focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1',
+                    'transition-[border-color,box-shadow] duration-[150ms] ease-out',
+                  ].join(' ')}
+                />
+              </label>
+
+              {/* Date after */}
+              <label className="flex flex-col gap-1">
+                <span className="text-[var(--text-xs)] font-medium text-[var(--color-text-secondary)]">
+                  Date after
+                </span>
+                <input
+                  type="date"
+                  value={filterDateAfter}
+                  onChange={(e) => setFilterDateAfter(e.target.value)}
+                  aria-label="Filter by date after"
+                  className={[
+                    'h-[44px] px-3 rounded-[var(--radius-md)]',
+                    'bg-[var(--color-surface-elevated)] border border-[var(--color-border)]',
+                    'text-[var(--text-sm)] text-[var(--color-text-primary)]',
+                    'placeholder:text-[var(--color-text-secondary)]',
+                    'outline-none',
+                    'focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1',
+                    'transition-[border-color,box-shadow] duration-[150ms] ease-out',
+                  ].join(' ')}
+                />
+              </label>
+
+              {/* Date before */}
+              <label className="flex flex-col gap-1">
+                <span className="text-[var(--text-xs)] font-medium text-[var(--color-text-secondary)]">
+                  Date before
+                </span>
+                <input
+                  type="date"
+                  value={filterDateBefore}
+                  onChange={(e) => setFilterDateBefore(e.target.value)}
+                  aria-label="Filter by date before"
+                  className={[
+                    'h-[44px] px-3 rounded-[var(--radius-md)]',
+                    'bg-[var(--color-surface-elevated)] border border-[var(--color-border)]',
+                    'text-[var(--text-sm)] text-[var(--color-text-primary)]',
+                    'placeholder:text-[var(--color-text-secondary)]',
+                    'outline-none',
+                    'focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1',
+                    'transition-[border-color,box-shadow] duration-[150ms] ease-out',
+                  ].join(' ')}
+                />
+              </label>
+
+              {/* Has attachments */}
+              <label className="flex items-end gap-2 h-[44px]">
+                <input
+                  type="checkbox"
+                  checked={filterHasAttachment}
+                  onChange={(e) => setFilterHasAttachment(e.target.checked)}
+                  aria-label="Filter by has attachments"
+                  className={[
+                    'w-[18px] h-[18px] rounded-[var(--radius-sm)]',
+                    'border border-[var(--color-border)]',
+                    'accent-[var(--color-accent)]',
+                    'cursor-pointer',
+                  ].join(' ')}
+                />
+                <span className="text-[var(--text-sm)] text-[var(--color-text-primary)] select-none cursor-pointer">
+                  Has attachments
+                </span>
+              </label>
+            </div>
+
+            {/* Clear filters */}
+            {hasActiveFilters && (
+              <div className="flex justify-end mt-3">
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className={[
+                    'h-[44px] px-4 rounded-[var(--radius-md)]',
+                    'text-[var(--text-sm)] font-medium',
+                    'text-[var(--color-accent)]',
+                    'hover:bg-[var(--color-accent)]/10',
+                    'transition-colors duration-[150ms] ease-out',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2',
+                  ].join(' ')}
+                >
+                  Clear filters
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Results area */}

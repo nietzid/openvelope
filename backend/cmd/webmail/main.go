@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/arfiansyah/webmail/internal/api"
+	"github.com/arfiansyah/webmail/internal/cache"
 	"github.com/arfiansyah/webmail/internal/config"
 	"github.com/arfiansyah/webmail/internal/imap"
 	"github.com/arfiansyah/webmail/internal/models"
@@ -45,11 +46,18 @@ func main() {
 	hub := ws.NewHub()
 	go hub.Run()
 
+	messageCache := cache.NewMessageCache(db)
+	if err := messageCache.EnsureIndexes(); err != nil {
+		log.Printf("warning: failed to ensure cache indexes: %v", err)
+	}
+
 	authHandler := api.NewAuthHandler(db, cfg, manager)
 	folderHandler := api.NewFolderHandler(db, cfg, manager)
 	messageHandler := api.NewMessageHandler(db, cfg, manager)
 	composeHandler := api.NewComposeHandler(db, cfg)
-	searchHandler := api.NewSearchHandler(db, cfg, manager)
+	searchHandler := api.NewSearchHandler(db, cfg, manager, messageCache)
+	contactsHandler := api.NewContactsHandler(db)
+	identitiesHandler := api.NewIdentitiesHandler(db)
 
 	app := fiber.New(fiber.Config{
 		AppName:      "Webmail",
@@ -68,7 +76,7 @@ func main() {
 		Format: "[${time}] ${status} ${method} ${path} (${latency})\n",
 	}))
 
-	api.RegisterRoutes(app, cfg, db, hub, manager, authHandler, folderHandler, messageHandler, composeHandler, searchHandler)
+	api.RegisterRoutes(app, cfg, db, hub, manager, authHandler, folderHandler, messageHandler, composeHandler, searchHandler, contactsHandler, identitiesHandler)
 
 	mimeTypes := map[string]string{
 		".html": "text/html; charset=utf-8",

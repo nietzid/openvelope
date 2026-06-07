@@ -16,7 +16,7 @@ func InitDB(dsn string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("connect to database: %w", err)
 	}
 
-	if err := db.AutoMigrate(&Session{}, &UserPreference{}); err != nil {
+	if err := db.AutoMigrate(&Session{}, &UserPreference{}, &Contact{}, &Identity{}, &Signature{}, &CachedMessage{}); err != nil {
 		return nil, fmt.Errorf("auto-migrate: %w", err)
 	}
 

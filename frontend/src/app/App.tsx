@@ -4,6 +4,8 @@ import { useAuthStore } from '../stores/authStore'
 
 const Login = lazy(() => import('./routes/Login'))
 const Mailbox = lazy(() => import('./routes/Mailbox'))
+const Settings = lazy(() => import('./routes/Settings'))
+const Contacts = lazy(() => import('./routes/Contacts'))
 
 /** Route guard — redirects to /login if no auth token */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -35,6 +37,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Mailbox />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contacts"
+            element={
+              <ProtectedRoute>
+                <Contacts />
               </ProtectedRoute>
             }
           />

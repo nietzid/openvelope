@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterRoutes(app *fiber.App, cfg *config.Config, db *gorm.DB, hub *ws.Hub, manager *imap.Manager, auth *AuthHandler, folders *FolderHandler, messages *MessageHandler, compose *ComposeHandler, search *SearchHandler) {
+func RegisterRoutes(app *fiber.App, cfg *config.Config, db *gorm.DB, hub *ws.Hub, manager *imap.Manager, auth *AuthHandler, folders *FolderHandler, messages *MessageHandler, compose *ComposeHandler, search *SearchHandler, contacts *ContactsHandler, identities *IdentitiesHandler) {
 	app.Get("/health", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
@@ -45,6 +45,25 @@ func RegisterRoutes(app *fiber.App, cfg *config.Config, db *gorm.DB, hub *ws.Hub
 	protected.Post("/send", compose.Send)
 	protected.Post("/attachments/upload", compose.UploadAttachment)
 	protected.Get("/search", search.Search)
+
+	contactGroup := protected.Group("/contacts")
+	contactGroup.Get("/", contacts.List)
+	contactGroup.Get("/autocomplete", contacts.Autocomplete)
+	contactGroup.Post("/", contacts.Create)
+	contactGroup.Patch("/:id", contacts.Update)
+	contactGroup.Delete("/:id", contacts.Delete)
+
+	identityGroup := protected.Group("/identities")
+	identityGroup.Get("/", identities.ListIdentities)
+	identityGroup.Post("/", identities.CreateIdentity)
+	identityGroup.Patch("/:id", identities.UpdateIdentity)
+	identityGroup.Delete("/:id", identities.DeleteIdentity)
+
+	sigGroup := protected.Group("/signatures")
+	sigGroup.Get("/", identities.ListSignatures)
+	sigGroup.Post("/", identities.CreateSignature)
+	sigGroup.Patch("/:id", identities.UpdateSignature)
+	sigGroup.Delete("/:id", identities.DeleteSignature)
 
 	// WebSocket route (also auth-protected via middleware)
 	app.Get("/ws", middleware.AuthRequired(cfg.Session.JWTSecret), wsUpgrade(), ws.HandleWebSocket(hub, manager, db, cfg))

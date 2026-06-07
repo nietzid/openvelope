@@ -50,6 +50,11 @@ export interface SearchQuery {
   from?: string;
   to?: string;
   subject?: string;
+  date_after?: string;
+  date_before?: string;
+  has_attachment?: boolean;
+  page?: number;
+  page_size?: number;
 }
 
 export interface SearchResponse {
@@ -100,4 +105,46 @@ export interface AttachmentUpload {
   content_type: string;
   content: string;
   size: number;
+}
+
+export interface Contact {
+  id: number;
+  email: string;
+  display_name: string;
+  first_name: string;
+  last_name: string;
+  email_addr: string;
+  phone: string;
+  company: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContactAutocompleteItem {
+  id: number;
+  display_name: string;
+  email_addr: string;
+}
+
+export interface Identity {
+  id: number;
+  email: string;
+  name: string;
+  from_email: string;
+  reply_to: string;
+  is_default: boolean;
+  signature_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Signature {
+  id: number;
+  email: string;
+  name: string;
+  content: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
 }

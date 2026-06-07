@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react'
 import { ComposeDialog } from './ComposeDialog'
 import { useUIStore } from '../../stores/uiStore'
 
@@ -7,6 +7,17 @@ import { useUIStore } from '../../stores/uiStore'
 vi.mock('../../services/compose', () => ({
   sendEmail: vi.fn(),
   uploadAttachment: vi.fn(),
+}))
+
+// Mock the contacts service for autocomplete
+vi.mock('../../services/contacts', () => ({
+  autocompleteContacts: vi.fn().mockResolvedValue([]),
+}))
+
+// Mock settings services (listIdentities, listSignatures used in useEffect)
+vi.mock('../../services/settings', () => ({
+  listIdentities: vi.fn().mockResolvedValue([]),
+  listSignatures: vi.fn().mockResolvedValue([]),
 }))
 
 // Mock TipTapEditor with a simple textarea for testing
@@ -246,6 +257,271 @@ describe('ComposeDialog', () => {
       fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
 
       expect(useUIStore.getState().composeOpen).toBe(false)
+    })
+  })
+
+  describe('contact autocomplete', () => {
+    beforeEach(() => {
+      useUIStore.getState().openCompose('new')
+    })
+
+    it('To field accepts text input', () => {
+      render(<ComposeDialog />)
+      const toInput = screen.getByLabelText('To')
+      fireEvent.change(toInput, { target: { value: 'test@example.com' } })
+      expect((toInput as HTMLInputElement).value).toBe('test@example.com')
+    })
+
+    it('To field accepts comma-separated values', () => {
+      render(<ComposeDialog />)
+      const toInput = screen.getByLabelText('To')
+      fireEvent.change(toInput, { target: { value: 'alice@example.com, bob@example.com' } })
+      expect((toInput as HTMLInputElement).value).toBe('alice@example.com, bob@example.com')
+    })
+
+    it('contacts service mock is available', async () => {
+      const { autocompleteContacts } = await import('../../services/contacts')
+      expect(typeof autocompleteContacts).toBe('function')
+    })
+
+    it('To field has combobox role and aria attributes', () => {
+      render(<ComposeDialog />)
+      const toInput = screen.getByLabelText('To')
+      expect(toInput.getAttribute('role')).toBe('combobox')
+      expect(toInput.getAttribute('aria-autocomplete')).toBe('list')
+      expect(toInput.getAttribute('aria-expanded')).toBe('false')
+    })
+
+    it('does not show dropdown when query is less than 2 chars', async () => {
+      vi.useFakeTimers()
+      render(<ComposeDialog />)
+      const toInput = screen.getByLabelText('To')
+      fireEvent.change(toInput, { target: { value: 'a' } })
+      await act(async () => { vi.advanceTimersByTime(400) })
+
+      expect(screen.queryByRole('listbox', { name: /contact suggestions/i })).toBeNull()
+      vi.useRealTimers()
+    })
+
+    it('renders autocomplete dropdown after debounce with valid query', async () => {
+      const { autocompleteContacts } = await import('../../services/contacts')
+      vi.mocked(autocompleteContacts).mockResolvedValue([
+        { id: 1, display_name: 'Alice', email_addr: 'alice@example.com' },
+        { id: 2, display_name: 'Bob', email_addr: 'bob@example.com' },
+      ])
+
+      vi.useFakeTimers()
+      render(<ComposeDialog />)
+      const toInput = screen.getByLabelText('To')
+      fireEvent.change(toInput, { target: { value: 'al' } })
+      expect(screen.queryByRole('listbox', { name: /contact suggestions/i })).toBeNull()
+
+      await act(async () => { vi.advanceTimersByTime(350) })
+      vi.useRealTimers()
+
+      await waitFor(() => {
+        expect(screen.getByRole('listbox', { name: /contact suggestions/i })).toBeDefined()
+        expect(screen.getByText('Alice')).toBeDefined()
+        expect(screen.getByText('Bob')).toBeDefined()
+      })
+    })
+
+    it('shows "No contacts found" when results are empty', async () => {
+      const { autocompleteContacts } = await import('../../services/contacts')
+      vi.mocked(autocompleteContacts).mockResolvedValue([])
+
+      vi.useFakeTimers()
+      render(<ComposeDialog />)
+      const toInput = screen.getByLabelText('To')
+      fireEvent.change(toInput, { target: { value: 'zz' } })
+      await act(async () => { vi.advanceTimersByTime(350) })
+      vi.useRealTimers()
+
+      await waitFor(() => {
+        expect(screen.getByText('No contacts found')).toBeDefined()
+      })
+    })
+
+    it('shows loading spinner while fetching', async () => {
+      const { autocompleteContacts } = await import('../../services/contacts')
+      vi.mocked(autocompleteContacts).mockImplementation(() => new Promise(() => {}))
+
+      vi.useFakeTimers()
+      render(<ComposeDialog />)
+      const toInput = screen.getByLabelText('To')
+      fireEvent.change(toInput, { target: { value: 'lo' } })
+      await act(async () => { vi.advanceTimersByTime(350) })
+      vi.useRealTimers()
+
+      await waitFor(() => {
+        expect(screen.getByText('Searching…')).toBeDefined()
+      })
+    })
+
+    it('click selection fills To field and closes dropdown', async () => {
+      const { autocompleteContacts } = await import('../../services/contacts')
+      vi.mocked(autocompleteContacts).mockResolvedValue([
+        { id: 1, display_name: 'Alice Smith', email_addr: 'alice@example.com' },
+      ])
+
+      vi.useFakeTimers()
+      render(<ComposeDialog />)
+      const toInput = screen.getByLabelText('To')
+      fireEvent.change(toInput, { target: { value: 'ali' } })
+      await act(async () => { vi.advanceTimersByTime(350) })
+      vi.useRealTimers()
+
+      await waitFor(() => {
+        expect(screen.getByText('Alice Smith')).toBeDefined()
+      })
+
+      const option = screen.getAllByRole('option')[0]
+      fireEvent.mouseDown(option)
+
+      await waitFor(() => {
+        expect((toInput as HTMLInputElement).value).toContain('Alice Smith')
+        expect((toInput as HTMLInputElement).value).toContain('alice@example.com')
+        expect(screen.queryByRole('listbox', { name: /contact suggestions/i })).toBeNull()
+      })
+    })
+
+    it('ArrowDown/ArrowUp navigate autocomplete options', async () => {
+      const { autocompleteContacts } = await import('../../services/contacts')
+      vi.mocked(autocompleteContacts).mockResolvedValue([
+        { id: 1, display_name: 'Alice', email_addr: 'alice@example.com' },
+        { id: 2, display_name: 'Bob', email_addr: 'bob@example.com' },
+      ])
+
+      vi.useFakeTimers()
+      render(<ComposeDialog />)
+      const toInput = screen.getByLabelText('To')
+      fireEvent.change(toInput, { target: { value: 'ab' } })
+      await act(async () => { vi.advanceTimersByTime(350) })
+      vi.useRealTimers()
+
+      await waitFor(() => {
+        expect(screen.getByRole('listbox', { name: /contact suggestions/i })).toBeDefined()
+      })
+
+      fireEvent.keyDown(toInput, { key: 'ArrowDown' })
+      expect(document.getElementById('compose-to-option-0')?.getAttribute('aria-selected')).toBe('true')
+
+      fireEvent.keyDown(toInput, { key: 'ArrowDown' })
+      expect(document.getElementById('compose-to-option-1')?.getAttribute('aria-selected')).toBe('true')
+
+      fireEvent.keyDown(toInput, { key: 'ArrowUp' })
+      expect(document.getElementById('compose-to-option-0')?.getAttribute('aria-selected')).toBe('true')
+    })
+
+    it('Escape closes autocomplete dropdown', async () => {
+      const { autocompleteContacts } = await import('../../services/contacts')
+      vi.mocked(autocompleteContacts).mockResolvedValue([
+        { id: 1, display_name: 'Alice', email_addr: 'alice@example.com' },
+      ])
+
+      vi.useFakeTimers()
+      render(<ComposeDialog />)
+      const toInput = screen.getByLabelText('To')
+      fireEvent.change(toInput, { target: { value: 'al' } })
+      await act(async () => { vi.advanceTimersByTime(350) })
+      vi.useRealTimers()
+
+      await waitFor(() => {
+        expect(screen.getByRole('listbox', { name: /contact suggestions/i })).toBeDefined()
+      })
+
+      fireEvent.keyDown(toInput, { key: 'Escape' })
+
+      expect(screen.queryByRole('listbox', { name: /contact suggestions/i })).toBeNull()
+      expect(toInput.getAttribute('aria-expanded')).toBe('false')
+    })
+
+    it('Enter selects active autocomplete option', async () => {
+      const { autocompleteContacts } = await import('../../services/contacts')
+      vi.mocked(autocompleteContacts).mockResolvedValue([
+        { id: 1, display_name: 'Alice', email_addr: 'alice@example.com' },
+      ])
+
+      vi.useFakeTimers()
+      render(<ComposeDialog />)
+      const toInput = screen.getByLabelText('To')
+      fireEvent.change(toInput, { target: { value: 'al' } })
+      await act(async () => { vi.advanceTimersByTime(350) })
+      vi.useRealTimers()
+
+      await waitFor(() => {
+        expect(screen.getByRole('listbox', { name: /contact suggestions/i })).toBeDefined()
+      })
+
+      fireEvent.keyDown(toInput, { key: 'ArrowDown' })
+      fireEvent.keyDown(toInput, { key: 'Enter' })
+
+      await waitFor(() => {
+        expect((toInput as HTMLInputElement).value).toContain('alice@example.com')
+        expect(screen.queryByRole('listbox', { name: /contact suggestions/i })).toBeNull()
+      })
+    })
+
+    it('dropdown has motion animation class', async () => {
+      const { autocompleteContacts } = await import('../../services/contacts')
+      vi.mocked(autocompleteContacts).mockResolvedValue([
+        { id: 1, display_name: 'Alice', email_addr: 'alice@example.com' },
+      ])
+
+      vi.useFakeTimers()
+      render(<ComposeDialog />)
+      const toInput = screen.getByLabelText('To')
+      fireEvent.change(toInput, { target: { value: 'al' } })
+      await act(async () => { vi.advanceTimersByTime(350) })
+      vi.useRealTimers()
+
+      await waitFor(() => {
+        const listbox = screen.getByRole('listbox', { name: /contact suggestions/i })
+        expect(listbox.style.animation).toContain('autocomplete-enter')
+      })
+    })
+
+    it('identity selector is rendered when identities are available', async () => {
+      const { listIdentities } = await import('../../services/settings')
+      vi.mocked(listIdentities).mockResolvedValue([
+        {
+          id: 1,
+          name: 'Test User',
+          email: 'test@example.com',
+          from_email: 'test@example.com',
+          reply_to: '',
+          is_default: true,
+          signature_id: null,
+          created_at: '2025-01-01T00:00:00Z',
+          updated_at: '2025-01-01T00:00:00Z',
+        },
+      ])
+
+      render(<ComposeDialog />)
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('From')).toBeDefined()
+        expect(screen.getByText(/Test User/)).toBeDefined()
+      })
+    })
+
+    it('body editor is rendered with mock', () => {
+      render(<ComposeDialog />)
+      expect(screen.getByTestId('mock-editor')).toBeDefined()
+    })
+
+    it('editor receives initialContent and onChange works', () => {
+      useUIStore.getState().closeCompose()
+      useUIStore.getState().openCompose('reply', {
+        to: 'test@example.com',
+        subject: 'Re: Test',
+        body: '<p>Original body</p>',
+      })
+      render(<ComposeDialog />)
+      const editor = screen.getByTestId('mock-editor') as HTMLTextAreaElement
+      expect(editor.defaultValue).toContain('Original body')
+      fireEvent.change(editor, { target: { value: '<p>Updated</p>' } })
+      expect(editor.value).toBe('<p>Updated</p>')
     })
   })
 })
