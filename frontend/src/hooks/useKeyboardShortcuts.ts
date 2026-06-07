@@ -210,13 +210,17 @@ export function useKeyboardShortcuts(
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      // Always allow Escape to close help modal
+      // Always allow Escape to close help modal (even in text inputs)
+      if (e.key === 'Escape' && helpOpenRef.current) {
+        setHelpOpen(false)
+        return
+      }
+
+      // Don't fire shortcuts when typing in text fields
+      if (isTextInput(e.target)) return
+
+      // Escape deselects focused message (only when not in text input)
       if (e.key === 'Escape') {
-        if (helpOpenRef.current) {
-          setHelpOpen(false)
-          return
-        }
-        // Deselect focused message
         setFocusedIndex(null)
         setSelectedUID(null)
         return
@@ -233,6 +237,11 @@ export function useKeyboardShortcuts(
 
       const msgs = msgListRef.current
       const currentFocused = focusedIndexRef.current
+
+      // Guard against empty message list for navigation shortcuts
+      if (msgs.length === 0 && (e.key === 'j' || e.key === 'J' || e.key === 'k' || e.key === 'K' || e.key === 'Enter')) {
+        return
+      }
 
       switch (e.key) {
         // ── Navigation ────────────────────────────────────────────────────
