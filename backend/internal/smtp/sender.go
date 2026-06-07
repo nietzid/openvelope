@@ -182,6 +182,10 @@ func Send(cfg SMTPConfig, email, password string, msg EmailMessage) error {
 		return fmt.Errorf("build message: %w", err)
 	}
 
+	return SendRaw(cfg, email, password, msg, raw)
+}
+
+func SendRaw(cfg SMTPConfig, email, password string, msg EmailMessage, raw []byte) error {
 	authUser, authPass := cfg.AuthCredentials(email, password)
 	sender := cfg.SenderAddress(email)
 	recipients := append(append(msg.To, msg.Cc...), msg.Bcc...)
@@ -205,20 +209,7 @@ func SendWithAttachments(cfg SMTPConfig, email, password string, msg EmailMessag
 		return fmt.Errorf("build message: %w", err)
 	}
 
-	authUser, authPass := cfg.AuthCredentials(email, password)
-	sender := cfg.SenderAddress(email)
-	recipients := append(append(msg.To, msg.Cc...), msg.Bcc...)
-
-	if cfg.StartTLS {
-		return sendWithStartTLS(cfg, authUser, authPass, sender, recipients, raw)
-	}
-
-	if cfg.IsNoAuth() {
-		return smtp.SendMail(cfg.Address(), nil, sender, recipients, raw)
-	}
-
-	auth := smtp.PlainAuth("", authUser, authPass, cfg.Host)
-	return smtp.SendMail(cfg.Address(), auth, sender, recipients, raw)
+	return SendRaw(cfg, email, password, msg, raw)
 }
 
 func sendWithStartTLS(cfg SMTPConfig, authUser, authPass, sender string, recipients []string, raw []byte) error {

@@ -41,6 +41,15 @@ function writeDraft(data: DraftData): void {
   }
 }
 
+function hasDraftContent(to: string, subject: string, body: string): boolean {
+  const textBody = body
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .trim()
+
+  return Boolean(to.trim() || subject.trim() || textBody)
+}
+
 /**
  * Removes the draft from localStorage.
  */
@@ -96,8 +105,7 @@ export function useDraftAutoSave(composeOpen: boolean, mode: 'new' | 'reply' | '
     }
 
     debounceTimerRef.current = setTimeout(() => {
-      // Only save if there's actual content
-      if (to.trim() || subject.trim() || body.trim()) {
+      if (hasDraftContent(to, subject, body)) {
         writeDraft({
           to,
           subject,
@@ -107,6 +115,32 @@ export function useDraftAutoSave(composeOpen: boolean, mode: 'new' | 'reply' | '
         })
       }
     }, DEBOUNCE_MS)
+  }, [mode])
+
+  /**
+   * Save immediately, bypassing debounce. Used when the compose dialog closes.
+   */
+  const saveDraftNow = useCallback((to: string, subject: string, body: string): boolean => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = null
+    }
+
+    if (!hasDraftContent(to, subject, body)) {
+      return false
+    }
+
+    const nextDraft = {
+      to,
+      subject,
+      body,
+      mode,
+      savedAt: Date.now(),
+    }
+    writeDraft(nextDraft)
+    setHasDraft(true)
+    setDraftData(nextDraft)
+    return true
   }, [mode])
 
   /**
@@ -132,5 +166,5 @@ export function useDraftAutoSave(composeOpen: boolean, mode: 'new' | 'reply' | '
     return data
   }, [draftData])
 
-  return { hasDraft, draftData, saveDraft, clearDraft, restoreDraft }
+  return { hasDraft, draftData, saveDraft, saveDraftNow, clearDraft, restoreDraft }
 }

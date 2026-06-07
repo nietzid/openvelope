@@ -1,6 +1,10 @@
 package imap
 
-import "testing"
+import (
+	"testing"
+
+	goimap "github.com/emersion/go-imap"
+)
 
 func TestParseMessageFlags(t *testing.T) {
 	tests := []struct {
@@ -35,5 +39,52 @@ func TestBuildSearchCriteria(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("BuildSearchCriteria(%+v) = %q, want %q", tt.query, got, tt.want)
 		}
+	}
+}
+
+func TestHeaderFieldsSectionFetchItem(t *testing.T) {
+	section := headerFieldsSection("References", "In-Reply-To")
+
+	got := section.FetchItem()
+	want := goimap.FetchItem("BODY.PEEK[HEADER.FIELDS (References In-Reply-To)]")
+	if got != want {
+		t.Fatalf("headerFieldsSection fetch item = %q, want %q", got, want)
+	}
+}
+
+func TestResolveSentFolder(t *testing.T) {
+	tests := []struct {
+		name    string
+		folders []FolderInfo
+		want    string
+	}{
+		{
+			name:    "prefers exact Sent folder",
+			folders: []FolderInfo{{Name: "INBOX"}, {Name: "Sent"}, {Name: "[Gmail]/Sent Mail"}},
+			want:    "Sent",
+		},
+		{
+			name:    "uses Gmail sent folder",
+			folders: []FolderInfo{{Name: "INBOX"}, {Name: "[Gmail]/Sent Mail"}},
+			want:    "[Gmail]/Sent Mail",
+		},
+		{
+			name:    "falls back to common suffix",
+			folders: []FolderInfo{{Name: "INBOX"}, {Name: "Archive"}, {Name: "Mail/Sent"}},
+			want:    "Mail/Sent",
+		},
+		{
+			name:    "defaults to Sent",
+			folders: []FolderInfo{{Name: "INBOX"}, {Name: "Archive"}},
+			want:    "Sent",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ResolveSentFolder(tt.folders); got != tt.want {
+				t.Fatalf("ResolveSentFolder() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

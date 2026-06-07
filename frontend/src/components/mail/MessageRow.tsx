@@ -194,6 +194,14 @@ export function MessageRow({
           `}
         >
           {message.subject}
+          {(message.thread_count ?? 0) > 1 && (
+            <span
+              className="ml-1.5 inline-flex items-center justify-center min-w-[1.25rem] h-4 px-1 text-[10px] font-medium text-[var(--color-text-secondary)] bg-[var(--color-surface)] rounded-full leading-none"
+              aria-label={`${message.thread_count} messages in thread`}
+            >
+              {message.thread_count}
+            </span>
+          )}
         </span>
 
         {/* Preview */}

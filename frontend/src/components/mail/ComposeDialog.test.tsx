@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, act, within } from '@testing-library/react'
 import { ComposeDialog } from './ComposeDialog'
 import { useUIStore } from '../../stores/uiStore'
 
@@ -33,6 +33,7 @@ vi.mock('../TipTapEditor', () => ({
 
 afterEach(() => {
   cleanup()
+  localStorage.clear()
   // Reset store state
   useUIStore.getState().closeCompose()
 })
@@ -250,13 +251,75 @@ describe('ComposeDialog', () => {
   })
 
   describe('cancel', () => {
-    it('closes dialog on Cancel click', () => {
+    it('closes dialog on Cancel click when message is empty', () => {
       useUIStore.getState().openCompose('new')
       render(<ComposeDialog />)
 
       fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
 
       expect(useUIStore.getState().composeOpen).toBe(false)
+    })
+
+    it('asks whether to save a draft on Cancel when message has content', () => {
+      useUIStore.getState().openCompose('new')
+      render(<ComposeDialog />)
+
+      fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Draft subject' } })
+      fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+
+      expect(screen.getByRole('alertdialog', { name: /save draft before closing/i })).toBeDefined()
+      expect(useUIStore.getState().composeOpen).toBe(true)
+    })
+
+    it('saves a draft immediately when choosing Save draft from Cancel prompt', () => {
+      useUIStore.getState().openCompose('new')
+      render(<ComposeDialog />)
+
+      fireEvent.change(screen.getByLabelText('To'), { target: { value: 'test@example.com' } })
+      fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Draft subject' } })
+      fireEvent.change(screen.getByTestId('mock-editor'), { target: { value: '<p>Draft body</p>' } })
+      fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      fireEvent.click(screen.getByRole('button', { name: /save draft/i }))
+
+      const draft = JSON.parse(localStorage.getItem('webmail-draft') ?? '{}')
+      expect(draft.to).toBe('test@example.com')
+      expect(draft.subject).toBe('Draft subject')
+      expect(draft.body).toBe('<p>Draft body</p>')
+      expect(useUIStore.getState().composeOpen).toBe(false)
+    })
+
+    it('clears draft when choosing Discard from Cancel prompt', () => {
+      localStorage.setItem('webmail-draft', JSON.stringify({
+        to: 'old@example.com',
+        subject: 'Old draft',
+        body: '<p>Old body</p>',
+        mode: 'new',
+        savedAt: Date.now(),
+      }))
+      useUIStore.getState().openCompose('new')
+      render(<ComposeDialog />)
+
+      fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'New draft' } })
+      fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      fireEvent.click(within(screen.getByRole('alertdialog', { name: /save draft before closing/i })).getByRole('button', { name: /discard/i }))
+
+      expect(localStorage.getItem('webmail-draft')).toBeNull()
+      expect(useUIStore.getState().composeOpen).toBe(false)
+    })
+
+    it('saves a draft immediately when dialog is dismissed', async () => {
+      useUIStore.getState().openCompose('new')
+      render(<ComposeDialog />)
+
+      fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Dismissed draft' } })
+      fireEvent.keyDown(document, { key: 'Escape' })
+
+      await waitFor(() => {
+        expect(useUIStore.getState().composeOpen).toBe(false)
+      })
+
+      const draft = JSON.parse(localStorage.getItem('webmail-draft') ?? '{}')
+      expect(draft.subject).toBe('Dismissed draft')
     })
   })
 

@@ -54,9 +54,10 @@ func main() {
 	authHandler := api.NewAuthHandler(db, cfg, manager)
 	folderHandler := api.NewFolderHandler(db, cfg, manager)
 	messageHandler := api.NewMessageHandler(db, cfg, manager)
-	composeHandler := api.NewComposeHandler(db, cfg)
+	composeHandler := api.NewComposeHandler(db, cfg, manager)
 	searchHandler := api.NewSearchHandler(db, cfg, manager, messageCache)
 	contactsHandler := api.NewContactsHandler(db)
+	contactGroupsHandler := api.NewContactGroupsHandler(db)
 	identitiesHandler := api.NewIdentitiesHandler(db)
 	idleHandler := api.NewIdleHandler(db, cfg, manager, hub)
 	smtpSettingsHandler := api.NewSmtpSettingsHandler(db, cfg)
@@ -78,23 +79,23 @@ func main() {
 		Format: "[${time}] ${status} ${method} ${path} (${latency})\n",
 	}))
 
-	api.RegisterRoutes(app, cfg, db, hub, manager, authHandler, folderHandler, messageHandler, composeHandler, searchHandler, contactsHandler, identitiesHandler, idleHandler, smtpSettingsHandler)
+	api.RegisterRoutes(app, cfg, db, hub, manager, authHandler, folderHandler, messageHandler, composeHandler, searchHandler, contactsHandler, contactGroupsHandler, identitiesHandler, idleHandler, smtpSettingsHandler)
 
 	mimeTypes := map[string]string{
-		".html": "text/html; charset=utf-8",
-		".js":   "application/javascript; charset=utf-8",
-		".css":  "text/css; charset=utf-8",
-		".json": "application/json; charset=utf-8",
-		".svg":  "image/svg+xml",
-		".png":  "image/png",
-		".jpg":  "image/jpeg",
-		".jpeg": "image/jpeg",
-		".gif":  "image/gif",
-		".ico":  "image/x-icon",
-		".woff": "font/woff",
+		".html":  "text/html; charset=utf-8",
+		".js":    "application/javascript; charset=utf-8",
+		".css":   "text/css; charset=utf-8",
+		".json":  "application/json; charset=utf-8",
+		".svg":   "image/svg+xml",
+		".png":   "image/png",
+		".jpg":   "image/jpeg",
+		".jpeg":  "image/jpeg",
+		".gif":   "image/gif",
+		".ico":   "image/x-icon",
+		".woff":  "font/woff",
 		".woff2": "font/woff2",
-		".ttf":  "font/ttf",
-		".map":  "application/json",
+		".ttf":   "font/ttf",
+		".map":   "application/json",
 	}
 	getContentType := func(path string) string {
 		dot := strings.LastIndex(path, ".")

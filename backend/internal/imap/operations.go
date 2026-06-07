@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -18,15 +19,17 @@ type MessageFlags struct {
 }
 
 type MessageSummary struct {
-	UID       uint32       `json:"uid"`
-	From      string       `json:"from"`
-	To        string       `json:"to"`
-	Subject   string       `json:"subject"`
-	Date      time.Time    `json:"date"`
-	Size      uint32       `json:"size"`
-	Flags     MessageFlags `json:"flags"`
-	HasAttach bool         `json:"has_attach"`
-	Preview   string       `json:"preview"`
+	UID         uint32       `json:"uid"`
+	From        string       `json:"from"`
+	To          string       `json:"to"`
+	Subject     string       `json:"subject"`
+	Date        time.Time    `json:"date"`
+	Size        uint32       `json:"size"`
+	Flags       MessageFlags `json:"flags"`
+	HasAttach   bool         `json:"has_attach"`
+	Preview     string       `json:"preview"`
+	ThreadID    string       `json:"thread_id,omitempty"`
+	ThreadCount int          `json:"thread_count,omitempty"`
 }
 
 type FolderInfo struct {
@@ -115,6 +118,16 @@ func BuildSearchCriteria(q SearchQuery) string {
 	return strings.Join(parts, " ")
 }
 
+func headerFieldsSection(fields ...string) *goimap.BodySectionName {
+	return &goimap.BodySectionName{
+		BodyPartName: goimap.BodyPartName{
+			Specifier: goimap.HeaderSpecifier,
+			Fields:    fields,
+		},
+		Peek: true,
+	}
+}
+
 func ListFolders(conn *UserConnection) ([]FolderInfo, error) {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
@@ -180,6 +193,51 @@ func RenameFolder(conn *UserConnection, oldName, newName string) error {
 	return nil
 }
 
+func ResolveSentFolder(folders []FolderInfo) string {
+	preferred := []string{
+		"Sent",
+		"Sent Mail",
+		"[Gmail]/Sent Mail",
+		"INBOX.Sent",
+		"INBOX/Sent",
+		"Sent Items",
+	}
+
+	byLower := make(map[string]string, len(folders))
+	for _, folder := range folders {
+		byLower[strings.ToLower(folder.Name)] = folder.Name
+	}
+
+	for _, name := range preferred {
+		if folder, ok := byLower[strings.ToLower(name)]; ok {
+			return folder
+		}
+	}
+
+	for _, folder := range folders {
+		lower := strings.ToLower(folder.Name)
+		if strings.HasSuffix(lower, "/sent") ||
+			strings.HasSuffix(lower, ".sent") ||
+			strings.Contains(lower, "sent mail") ||
+			strings.Contains(lower, "sent items") {
+			return folder.Name
+		}
+	}
+
+	return "Sent"
+}
+
+func AppendMessage(conn *UserConnection, folder string, raw []byte, flags []string, date time.Time) error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if err := conn.Client.Append(folder, flags, date, bytes.NewReader(raw)); err != nil {
+		return fmt.Errorf("append message to %q: %w", folder, err)
+	}
+
+	return nil
+}
+
 // ListMessages fetches a page of message summaries from the given folder.
 // UIDs are sorted in descending order (newest first).
 func ListMessages(conn *UserConnection, folder string, page, pageSize int) ([]MessageSummary, int, error) {
@@ -224,12 +282,16 @@ func ListMessages(conn *UserConnection, folder string, page, pageSize int) ([]Me
 		pageSeq.AddNum(uid)
 	}
 
+	// Fetch headers for threading (References, In-Reply-To)
+	threadSection := headerFieldsSection("References", "In-Reply-To")
+
 	items := []goimap.FetchItem{
 		goimap.FetchUid,
 		goimap.FetchEnvelope,
 		goimap.FetchFlags,
 		goimap.FetchRFC822Size,
 		goimap.FetchInternalDate,
+		threadSection.FetchItem(),
 	}
 
 	ch := make(chan *goimap.Message, 10)
@@ -259,6 +321,12 @@ func ListMessages(conn *UserConnection, folder string, page, pageSize int) ([]Me
 		}
 		if !msg.InternalDate.IsZero() {
 			s.Date = msg.InternalDate
+		}
+		// Extract thread_id from References or In-Reply-To headers
+		if literal := msg.GetBody(threadSection); literal != nil {
+			if data, err := io.ReadAll(literal); err == nil {
+				s.ThreadID = extractThreadID(string(data))
+			}
 		}
 		summaries = append(summaries, s)
 	}
@@ -322,10 +390,7 @@ func GetMessageHeaders(conn *UserConnection, folder string, uid uint32) (*Messag
 	seq := new(goimap.SeqSet)
 	seq.AddNum(uid)
 
-	section := &goimap.BodySectionName{
-		Peek: true,
-	}
-	section.Fields = []string{"References"}
+	section := headerFieldsSection("References")
 
 	items := []goimap.FetchItem{
 		goimap.FetchUid,
@@ -374,6 +439,37 @@ func GetMessageHeaders(conn *UserConnection, folder string, uid uint32) (*Messag
 	}
 
 	return &headers, nil
+}
+
+// extractThreadID extracts a thread ID from raw References/In-Reply-To header data.
+// It uses the first message-id found in References, falling back to In-Reply-To.
+func extractThreadID(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	var references, inReplyTo string
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "references:") {
+			references = strings.TrimSpace(line[len("references:"):])
+		} else if strings.HasPrefix(lower, "in-reply-to:") {
+			inReplyTo = strings.TrimSpace(line[len("in-reply-to:"):])
+		}
+	}
+	// Use the first message-id in References as thread root
+	if references != "" {
+		fields := strings.Fields(references)
+		if len(fields) > 0 {
+			return strings.Trim(fields[0], "<>")
+		}
+	}
+	// Fall back to In-Reply-To
+	if inReplyTo != "" {
+		return strings.Trim(strings.Fields(inReplyTo)[0], "<>")
+	}
+	return ""
 }
 
 // parseReferencesHeader extracts the References value from a raw "References: ..." header line.
@@ -627,6 +723,116 @@ func formatAddresses(addrs []*goimap.Address) string {
 	return result
 }
 
+// GetThreadMessages searches the given folder for messages belonging to a thread.
+// A message belongs to the thread if its References header contains the threadId
+// OR its Message-ID matches the threadId. Results are sorted by date ascending.
+func GetThreadMessages(conn *UserConnection, folder string, threadID string) ([]MessageSummary, error) {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if _, err := conn.Client.Select(folder, true); err != nil {
+		return nil, fmt.Errorf("select folder %q: %w", folder, err)
+	}
+
+	// Search for messages that have the threadID in their References header
+	criteria := goimap.NewSearchCriteria()
+	criteria.Header.Set("References", threadID)
+
+	refsUIDs, err := conn.Client.UidSearch(criteria)
+	if err != nil {
+		return nil, fmt.Errorf("search references: %w", err)
+	}
+
+	// Also search for the thread root message (whose Message-ID matches threadID)
+	rootCriteria := goimap.NewSearchCriteria()
+	rootCriteria.Header.Set("Message-ID", threadID)
+
+	rootUIDs, err := conn.Client.UidSearch(rootCriteria)
+	if err != nil {
+		return nil, fmt.Errorf("search message-id: %w", err)
+	}
+
+	// Merge UIDs (deduplicate)
+	uidSet := make(map[uint32]bool)
+	for _, uid := range refsUIDs {
+		uidSet[uid] = true
+	}
+	for _, uid := range rootUIDs {
+		uidSet[uid] = true
+	}
+
+	if len(uidSet) == 0 {
+		return []MessageSummary{}, nil
+	}
+
+	seq := new(goimap.SeqSet)
+	for uid := range uidSet {
+		seq.AddNum(uid)
+	}
+
+	threadSection := headerFieldsSection("References", "In-Reply-To")
+
+	items := []goimap.FetchItem{
+		goimap.FetchUid,
+		goimap.FetchEnvelope,
+		goimap.FetchFlags,
+		goimap.FetchRFC822Size,
+		goimap.FetchInternalDate,
+		threadSection.FetchItem(),
+	}
+
+	ch := make(chan *goimap.Message, 10)
+	done := make(chan error, 1)
+	go func() {
+		done <- conn.Client.UidFetch(seq, items, ch)
+	}()
+
+	var summaries []MessageSummary
+	for msg := range ch {
+		s := MessageSummary{
+			UID:  msg.Uid,
+			Size: msg.Size,
+		}
+		if msg.Envelope != nil {
+			if msg.Envelope.From != nil && len(msg.Envelope.From) > 0 {
+				s.From = formatAddress(msg.Envelope.From[0])
+			}
+			if msg.Envelope.To != nil && len(msg.Envelope.To) > 0 {
+				s.To = formatAddresses(msg.Envelope.To)
+			}
+			s.Subject = msg.Envelope.Subject
+			s.Date = msg.Envelope.Date
+		}
+		if msg.Flags != nil {
+			s.Flags = ParseMessageFlags(msg.Flags)
+		}
+		if !msg.InternalDate.IsZero() {
+			s.Date = msg.InternalDate
+		}
+		if literal := msg.GetBody(threadSection); literal != nil {
+			if data, err := io.ReadAll(literal); err == nil {
+				s.ThreadID = extractThreadID(string(data))
+			}
+		}
+		summaries = append(summaries, s)
+	}
+
+	if err := <-done; err != nil {
+		return nil, fmt.Errorf("fetch thread messages: %w", err)
+	}
+
+	// Sort by date ascending (oldest first for conversation view)
+	for i := 0; i < len(summaries)-1; i++ {
+		for j := i + 1; j < len(summaries); j++ {
+			if summaries[j].Date.Before(summaries[i].Date) {
+				summaries[i], summaries[j] = summaries[j], summaries[i]
+			}
+		}
+	}
+
+	return summaries, nil
+}
+
 // SearchMessages searches a folder with the given criteria and returns
 // summaries of matching messages.
 func SearchMessages(conn *UserConnection, folder string, query SearchQuery) ([]MessageSummary, error) {
@@ -691,12 +897,16 @@ func SearchMessages(conn *UserConnection, folder string, query SearchQuery) ([]M
 		seq.AddNum(uid)
 	}
 
+	// Fetch headers for threading (References, In-Reply-To)
+	searchThreadSection := headerFieldsSection("References", "In-Reply-To")
+
 	items := []goimap.FetchItem{
 		goimap.FetchUid,
 		goimap.FetchEnvelope,
 		goimap.FetchFlags,
 		goimap.FetchRFC822Size,
 		goimap.FetchInternalDate,
+		searchThreadSection.FetchItem(),
 	}
 
 	ch := make(chan *goimap.Message, 10)
@@ -726,6 +936,12 @@ func SearchMessages(conn *UserConnection, folder string, query SearchQuery) ([]M
 		}
 		if !msg.InternalDate.IsZero() {
 			s.Date = msg.InternalDate
+		}
+		// Extract thread_id from References or In-Reply-To headers
+		if literal := msg.GetBody(searchThreadSection); literal != nil {
+			if data, err := io.ReadAll(literal); err == nil {
+				s.ThreadID = extractThreadID(string(data))
+			}
 		}
 		summaries = append(summaries, s)
 	}

@@ -23,6 +23,8 @@ export interface MessageSummary {
   flags: MessageFlags;
   has_attach: boolean;
   preview: string;
+  thread_id?: string;
+  thread_count?: number;
 }
 
 export interface MessageListResponse {
@@ -125,6 +127,14 @@ export interface ContactAutocompleteItem {
   id: number;
   display_name: string;
   email_addr: string;
+}
+
+export interface ContactGroup {
+  id: number;
+  name: string;
+  members: Contact[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Identity {

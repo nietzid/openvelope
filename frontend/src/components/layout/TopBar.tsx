@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { useMailboxStore } from '../../stores/mailboxStore'
 import { useUIStore } from '../../stores/uiStore'
+import { useThreadingStore } from '../../hooks/useThreading'
 import { logout } from '../../services/auth'
 import { batchOperation } from '../../services/messages'
 import { showUndoToast } from '../../hooks/useUndo'
@@ -178,6 +179,10 @@ export function TopBar() {
         </Button>
       </div>
 
+      {/* Thread view toggle */}
+      <div className="h-4 w-px bg-[var(--color-border)]" />
+      <ThreadViewToggle />
+
       {/* Spacer */}
       <div className="flex-1" />
 
@@ -233,5 +238,45 @@ export function TopBar() {
         </svg>
       </Button>
     </header>
+  )
+}
+
+/**
+ * Toggle button for switching between Conversation and Flat thread view modes.
+ */
+function ThreadViewToggle() {
+  const viewMode = useThreadingStore((s) => s.viewMode)
+  const toggleViewMode = useThreadingStore((s) => s.toggleViewMode)
+
+  const isConversation = viewMode === 'conversation'
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={toggleViewMode}
+      tooltip={isConversation ? 'Switch to flat view' : 'Switch to conversation view'}
+      aria-pressed={isConversation}
+    >
+      {isConversation ? (
+        // Conversation icon (stacked messages)
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      ) : (
+        // Flat list icon
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <line x1="8" y1="6" x2="21" y2="6" />
+          <line x1="8" y1="12" x2="21" y2="12" />
+          <line x1="8" y1="18" x2="21" y2="18" />
+          <line x1="3" y1="6" x2="3.01" y2="6" />
+          <line x1="3" y1="12" x2="3.01" y2="12" />
+          <line x1="3" y1="18" x2="3.01" y2="18" />
+        </svg>
+      )}
+      <span className="hidden md:inline text-xs">
+        {isConversation ? 'Conversation' : 'Flat'}
+      </span>
+    </Button>
   )
 }

@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterRoutes(app *fiber.App, cfg *config.Config, db *gorm.DB, hub *ws.Hub, manager *imap.Manager, auth *AuthHandler, folders *FolderHandler, messages *MessageHandler, compose *ComposeHandler, search *SearchHandler, contacts *ContactsHandler, identities *IdentitiesHandler, idle *IdleHandler, smtpSettings *SmtpSettingsHandler) {
+func RegisterRoutes(app *fiber.App, cfg *config.Config, db *gorm.DB, hub *ws.Hub, manager *imap.Manager, auth *AuthHandler, folders *FolderHandler, messages *MessageHandler, compose *ComposeHandler, search *SearchHandler, contacts *ContactsHandler, contactGroups *ContactGroupsHandler, identities *IdentitiesHandler, idle *IdleHandler, smtpSettings *SmtpSettingsHandler) {
 	app.Get("/health", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
@@ -39,6 +39,7 @@ func RegisterRoutes(app *fiber.App, cfg *config.Config, db *gorm.DB, hub *ws.Hub
 	msgGroup.Delete("/:uid", messages.Delete)
 	msgGroup.Post("/move", messages.Move)
 	msgGroup.Post("/batch", messages.Batch)
+	msgGroup.Get("/thread/:threadId", messages.GetThread)
 	msgGroup.Get("/:uid/attachments", messages.ListAttachments)
 	msgGroup.Get("/:uid/attachments/:partId", messages.DownloadAttachment)
 
@@ -52,6 +53,12 @@ func RegisterRoutes(app *fiber.App, cfg *config.Config, db *gorm.DB, hub *ws.Hub
 	contactGroup.Post("/", contacts.Create)
 	contactGroup.Patch("/:id", contacts.Update)
 	contactGroup.Delete("/:id", contacts.Delete)
+
+	groupRoutes := contactGroup.Group("/groups")
+	groupRoutes.Get("/", contactGroups.List)
+	groupRoutes.Post("/", contactGroups.Create)
+	groupRoutes.Patch("/:id", contactGroups.Update)
+	groupRoutes.Delete("/:id", contactGroups.Delete)
 
 	identityGroup := protected.Group("/identities")
 	identityGroup.Get("/", identities.ListIdentities)

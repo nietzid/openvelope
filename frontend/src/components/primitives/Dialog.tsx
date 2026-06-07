@@ -7,6 +7,7 @@ export interface DialogProps {
   title: string
   children: React.ReactNode
   labelId?: string
+  panelClassName?: string
 }
 
 /** Selector for all focusable elements inside the dialog */
@@ -26,7 +27,7 @@ const FOCUSABLE_SELECTOR = [
  * Open: scale(0.96)/opacity 0 → scale(1)/opacity 1, 300ms ease-out-expo
  * Close: scale(0.98)/opacity 0, 200ms ease-in-quad
  */
-export function Dialog({ open, onClose, title, children, labelId }: DialogProps) {
+export function Dialog({ open, onClose, title, children, labelId, panelClassName }: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const [mounted, setMounted] = useState(false)
@@ -155,7 +156,8 @@ export function Dialog({ open, onClose, title, children, labelId }: DialogProps)
         aria-labelledby={resolvedLabelId}
         tabIndex={-1}
         className={[
-          'relative z-10 w-full max-w-lg rounded-[var(--radius-lg)]',
+          'relative z-10 w-full rounded-[var(--radius-lg)]',
+          panelClassName ?? 'max-w-lg',
           'bg-[var(--color-surface-elevated)] shadow-[var(--shadow-high)]',
           'p-[var(--space-6)]',
           'outline-none',

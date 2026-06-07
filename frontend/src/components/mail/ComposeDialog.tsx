@@ -108,6 +108,15 @@ function formatRelativeTime(timestamp: number): string {
   return `${diffDay} days ago`
 }
 
+function hasDraftContent(to: string, subject: string, body: string): boolean {
+  const textBody = body
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .trim()
+
+  return Boolean(to.trim() || subject.trim() || textBody)
+}
+
 /**
  * Editor loading fallback shown while TipTap chunk loads.
  */
@@ -143,9 +152,10 @@ export function ComposeDialog() {
   const [sendError, setSendError] = useState<string | null>(null)
   const [attachError, setAttachError] = useState<string | null>(null)
   const [editorLoadError, setEditorLoadError] = useState(false)
+  const [cancelPromptOpen, setCancelPromptOpen] = useState(false)
 
   // Draft auto-save
-  const { hasDraft, draftData, saveDraft, clearDraft, restoreDraft } = useDraftAutoSave(composeOpen, composeMode)
+  const { hasDraft, draftData, saveDraft, saveDraftNow, clearDraft, restoreDraft } = useDraftAutoSave(composeOpen, composeMode)
 
   // Identity state
   const [identities, setIdentities] = useState<Identity[]>([])
@@ -195,6 +205,7 @@ export function ComposeDialog() {
     setSendError(null)
     setAttachError(null)
     setEditorLoadError(false)
+    setCancelPromptOpen(false)
   }
 
   // Fetch message headers asynchronously and rebuild body with attribution
@@ -259,12 +270,36 @@ export function ComposeDialog() {
     return () => { cancelled = true }
   }, [composeOpen, composeMode])
 
-  // Reset state when dialog closes
-  const handleClose = useCallback(() => {
+  const closeDialog = useCallback(() => {
     initializedRef.current = null
-    clearDraft()
+    setCancelPromptOpen(false)
     closeCompose()
-  }, [closeCompose, clearDraft])
+  }, [closeCompose])
+
+  const handleDismiss = useCallback(() => {
+    saveDraftNow(to, subject, bodyHtml)
+    closeDialog()
+  }, [bodyHtml, closeDialog, saveDraftNow, subject, to])
+
+  const handleCancelClick = useCallback(() => {
+    if (!hasDraftContent(to, subject, bodyHtml)) {
+      clearDraft()
+      closeDialog()
+      return
+    }
+
+    setCancelPromptOpen(true)
+  }, [bodyHtml, clearDraft, closeDialog, subject, to])
+
+  const handleSaveDraftAndClose = useCallback(() => {
+    saveDraftNow(to, subject, bodyHtml)
+    closeDialog()
+  }, [bodyHtml, closeDialog, saveDraftNow, subject, to])
+
+  const handleDiscardDraftAndClose = useCallback(() => {
+    clearDraft()
+    closeDialog()
+  }, [clearDraft, closeDialog])
 
   // Check if any attachment is currently uploading
   const isUploading = attachments.some((a) => a.uploading)
@@ -476,13 +511,14 @@ export function ComposeDialog() {
       })
 
       // Success — clear draft and close dialog
-      handleClose()
+      clearDraft()
+      closeDialog()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to send email. Please try again.'
       setSendError(message)
       setSending(false)
     }
-  }, [to, subject, bodyHtml, attachments, handleClose])
+  }, [to, subject, bodyHtml, attachments, clearDraft, closeDialog])
 
   // Restore draft — fills form fields with saved draft data
   const handleRestoreDraft = useCallback(() => {
@@ -508,7 +544,13 @@ export function ComposeDialog() {
         : 'New Message'
 
   return (
-    <Dialog open={composeOpen} onClose={handleClose} title={dialogTitle} labelId="compose-dialog-title">
+    <Dialog
+      open={composeOpen}
+      onClose={handleDismiss}
+      title={dialogTitle}
+      labelId="compose-dialog-title"
+      panelClassName="max-w-4xl"
+    >
       <div className="flex flex-col gap-[var(--space-4)]">
         {/* Draft restoration banner */}
         {hasDraft && draftData && (
@@ -528,6 +570,29 @@ export function ComposeDialog() {
               </Button>
               <Button variant="primary" size="sm" onClick={handleRestoreDraft}>
                 Restore
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {cancelPromptOpen && (
+          <div
+            className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-[var(--space-4)] py-[var(--space-3)]"
+            role="alertdialog"
+            aria-label="Save draft before closing"
+          >
+            <p className="text-sm font-medium text-[var(--color-text-primary)]">
+              Save this message as a draft?
+            </p>
+            <div className="mt-[var(--space-3)] flex items-center justify-end gap-[var(--space-2)]">
+              <Button variant="ghost" size="sm" onClick={() => setCancelPromptOpen(false)}>
+                Keep editing
+              </Button>
+              <Button variant="secondary" size="sm" onClick={handleDiscardDraftAndClose}>
+                Discard
+              </Button>
+              <Button variant="primary" size="sm" onClick={handleSaveDraftAndClose}>
+                Save draft
               </Button>
             </div>
           </div>
@@ -779,7 +844,7 @@ export function ComposeDialog() {
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-[var(--space-3)] pt-[var(--space-2)]">
-          <Button variant="ghost" size="sm" onClick={handleClose} disabled={sending}>
+          <Button variant="ghost" size="sm" onClick={handleCancelClick} disabled={sending}>
             Cancel
           </Button>
           <Button

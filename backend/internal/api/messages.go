@@ -308,6 +308,32 @@ func (h *MessageHandler) Move(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{"ok": true})
 }
 
+func (h *MessageHandler) GetThread(c fiber.Ctx) error {
+	folder := c.Query("folder", "INBOX")
+	threadID := c.Params("threadId")
+	if threadID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fiber.Map{"code": "BAD_REQUEST", "message": "threadId is required"},
+		})
+	}
+
+	conn, err := h.getUserConnection(c)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "IMAP_FAILED", "message": err.Error()},
+		})
+	}
+
+	messages, err := imap.GetThreadMessages(conn, folder, threadID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "IMAP_FAILED", "message": err.Error()},
+		})
+	}
+
+	return c.JSON(fiber.Map{"messages": messages})
+}
+
 func (h *MessageHandler) ListAttachments(c fiber.Ctx) error {
 	folder := c.Query("folder", "INBOX")
 	uidStr := c.Params("uid")

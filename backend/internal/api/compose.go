@@ -4,9 +4,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/arfiansyah/webmail/internal/auth"
 	"github.com/arfiansyah/webmail/internal/config"
+	"github.com/arfiansyah/webmail/internal/imap"
 	"github.com/arfiansyah/webmail/internal/models"
 	"github.com/arfiansyah/webmail/internal/smtp"
 	"github.com/gofiber/fiber/v3"
@@ -14,12 +16,13 @@ import (
 )
 
 type ComposeHandler struct {
-	db  *gorm.DB
-	cfg *config.Config
+	db      *gorm.DB
+	cfg     *config.Config
+	manager *imap.Manager
 }
 
-func NewComposeHandler(db *gorm.DB, cfg *config.Config) *ComposeHandler {
-	return &ComposeHandler{db: db, cfg: cfg}
+func NewComposeHandler(db *gorm.DB, cfg *config.Config, manager *imap.Manager) *ComposeHandler {
+	return &ComposeHandler{db: db, cfg: cfg, manager: manager}
 }
 
 // UploadAttachment handles multipart/form-data file upload for compose.
@@ -173,11 +176,55 @@ func (h *ComposeHandler) Send(c fiber.Ctx) error {
 		})
 	}
 
-	if err := smtp.SendWithAttachments(smtpCfg, email, password, msg, smtpAttachments); err != nil {
+	raw, err := smtp.BuildMessageWithAttachments(msg, smtpAttachments)
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fiber.Map{"code": "SMTP_FAILED", "message": err.Error()},
 		})
 	}
 
-	return c.JSON(fiber.Map{"ok": true})
+	if err := smtp.SendRaw(smtpCfg, email, password, msg, raw); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{"code": "SMTP_FAILED", "message": err.Error()},
+		})
+	}
+
+	sentSaved := true
+	var sentSaveError string
+	if h.manager != nil {
+		conn, err := h.manager.GetOrCreate(email, password)
+		if err != nil {
+			sentSaved = false
+			sentSaveError = err.Error()
+		} else {
+			sentFolder := "Sent"
+			sentFolderExists := false
+			if folders, err := imap.ListFolders(conn); err == nil {
+				sentFolder = imap.ResolveSentFolder(folders)
+				for _, folder := range folders {
+					if folder.Name == sentFolder {
+						sentFolderExists = true
+						break
+					}
+				}
+			}
+			if err := imap.AppendMessage(conn, sentFolder, raw, []string{`\Seen`}, time.Now()); err != nil {
+				if sentFolder == "Sent" && !sentFolderExists {
+					if createErr := imap.CreateFolder(conn, sentFolder); createErr == nil {
+						err = imap.AppendMessage(conn, sentFolder, raw, []string{`\Seen`}, time.Now())
+					}
+				}
+				if err != nil {
+					sentSaved = false
+					sentSaveError = err.Error()
+				}
+			}
+		}
+	}
+
+	return c.JSON(fiber.Map{
+		"ok":              true,
+		"sent_saved":      sentSaved,
+		"sent_save_error": sentSaveError,
+	})
 }

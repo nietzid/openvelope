@@ -88,3 +88,14 @@ export async function downloadAttachment(folder: string, uid: number, partId: st
   })
   return response.data
 }
+
+export async function getThreadMessages(
+  folder: string,
+  threadId: string,
+): Promise<MessageSummary[]> {
+  const { data } = await api.get<{ messages: MessageSummary[] }>(
+    `/messages/thread/${encodeURIComponent(threadId)}`,
+    { params: { folder } },
+  )
+  return data.messages ?? []
+}

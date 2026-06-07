@@ -2,7 +2,7 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 interface TipTapEditorProps {
   initialContent?: string
@@ -11,10 +11,14 @@ interface TipTapEditorProps {
 }
 
 function TipTapEditor({ initialContent = '', onChange, editorRef }: TipTapEditorProps) {
+  const lastEmittedContentRef = useRef<string | null>(null)
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: false,
+        link: false,
+        underline: false,
       }),
       Underline,
       Link.configure({
@@ -26,7 +30,9 @@ function TipTapEditor({ initialContent = '', onChange, editorRef }: TipTapEditor
     ],
     content: initialContent,
     onUpdate: ({ editor }) => {
-      onChange?.(editor.getHTML())
+      const html = editor.getHTML()
+      lastEmittedContentRef.current = html
+      onChange?.(html)
     },
   })
 
@@ -36,10 +42,12 @@ function TipTapEditor({ initialContent = '', onChange, editorRef }: TipTapEditor
 
   // Update content when initialContent changes (for reply/forward pre-fill)
   useEffect(() => {
-    if (editor && initialContent) {
-      editor.commands.setContent(initialContent)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!editor) return
+    if (initialContent === lastEmittedContentRef.current) return
+    if (initialContent === editor.getHTML()) return
+
+    editor.commands.setContent(initialContent, { emitUpdate: false })
+    lastEmittedContentRef.current = null
   }, [initialContent, editor])
 
   if (!editor) {
@@ -112,7 +120,7 @@ function TipTapEditor({ initialContent = '', onChange, editorRef }: TipTapEditor
       </div>
       <EditorContent
         editor={editor}
-        className="min-h-[200px] p-3 prose prose-sm max-w-none focus:outline-none"
+        className="min-h-[200px] p-3 prose prose-sm max-w-none [&_.ProseMirror]:min-h-[176px] [&_.ProseMirror]:outline-none [&_.ProseMirror]:focus:outline-none"
       />
     </div>
   )
