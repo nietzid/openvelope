@@ -10,13 +10,17 @@ import { MessageRow } from './MessageRow'
 
 const ESTIMATED_ROW_HEIGHT = 72
 
+interface MessageListProps {
+  searchInputRef?: React.RefObject<HTMLInputElement | null>
+}
+
 /**
  * Virtualized message list with embedded search bar, stagger entrance
  * animations, infinite scroll loading, loading skeleton, and error state.
  *
  * Validates: Requirements 9.1, 9.2, 9.4, 9.5, 9.6, 9.8, 9.9
  */
-export function MessageList() {
+export function MessageList({ searchInputRef }: MessageListProps) {
   const currentFolder = useMailboxStore((s) => s.currentFolder)
   const messages = useMailboxStore((s) => s.messages)
   const setMessages = useMailboxStore((s) => s.setMessages)
@@ -42,6 +46,9 @@ export function MessageList() {
   const setSearchLoading = useMailboxStore((s) => s.setSearchLoading)
   const clearSearch = useMailboxStore((s) => s.clearSearch)
 
+  // Keyboard navigation
+  const focusedIndex = useMailboxStore((s) => s.focusedIndex)
+
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,6 +67,8 @@ export function MessageList() {
 
   const parentRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const internalSearchRef = useRef<HTMLInputElement>(null)
+  const resolvedSearchRef = searchInputRef ?? internalSearchRef
   const reducedMotion = useReducedMotion()
 
   const hasMore = (page + 1) * pageSize < total
@@ -694,6 +703,7 @@ export function MessageList() {
                     <MessageRow
                       message={msg}
                       isSelected={isSelected}
+                      isFocused={index === focusedIndex}
                       isBatchSelected={selectedUIDs.has(msg.uid)}
                       onSelect={handleSelect}
                       onBatchToggle={handleBatchToggle}

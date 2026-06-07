@@ -4,6 +4,7 @@ import type { MessageSummary } from '../../types'
 export interface MessageRowProps {
   message: MessageSummary
   isSelected: boolean
+  isFocused: boolean
   isBatchSelected: boolean
   onSelect: (uid: number) => void
   onBatchToggle: (uid: number) => void
@@ -66,6 +67,7 @@ function truncatePreview(text: string, maxLength: number = 120): string {
 export function MessageRow({
   message,
   isSelected,
+  isFocused,
   isBatchSelected,
   onSelect,
   onBatchToggle,
@@ -101,7 +103,10 @@ export function MessageRow({
         group flex items-center gap-3 px-4 h-[72px] cursor-pointer
         transition-colors duration-[150ms] ease-out select-none
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2
-        ${isSelected ? 'bg-[var(--color-accent)]/10' : 'hover:bg-[var(--color-surface)]'}
+        ${isSelected ? 'bg-[var(--color-accent)]/10' : ''}
+        ${isFocused && !isSelected ? 'bg-[var(--color-surface)]' : ''}
+        ${!isSelected && !isFocused ? 'hover:bg-[var(--color-surface)]' : ''}
+        ${isFocused ? 'border-l-2 border-l-[var(--color-accent)]' : 'border-l-2 border-l-transparent'}
       `}
       style={{ ...style, ...animationStyle }}
       onClick={handleRowClick}

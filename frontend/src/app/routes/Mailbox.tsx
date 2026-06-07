@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LayoutShell } from '../../components/layout/LayoutShell'
 import { TopBar } from '../../components/layout/TopBar'
@@ -11,6 +11,7 @@ import { ConnectionStatus } from '../../components/layout/ConnectionStatus'
 import { useAuthStore } from '../../stores/authStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useMailboxUpdates } from '../../hooks/useMailboxUpdates'
+import { useKeyboardShortcuts, KeyboardShortcutsModal } from '../../hooks/useKeyboardShortcuts'
 
 /**
  * Mailbox route — assembles the LayoutShell with all feature components.
@@ -30,6 +31,10 @@ export default function Mailbox() {
       navigate('/login', { replace: true })
     }
   }, [accessToken, navigate])
+
+  // Keyboard shortcuts
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const { helpOpen, closeHelp } = useKeyboardShortcuts(searchInputRef)
 
   return (
     <div className="flex flex-col h-screen w-full overflow-hidden bg-bg">
@@ -58,7 +63,7 @@ export default function Mailbox() {
       <div className="flex-1 min-h-0">
         <LayoutShell
           sidebar={<Sidebar />}
-          messageList={<MessageList />}
+          messageList={<MessageList searchInputRef={searchInputRef} />}
           messageView={<MessageView />}
         />
       </div>
@@ -66,6 +71,7 @@ export default function Mailbox() {
       {/* Overlays */}
       <ComposeDialog />
       <SearchInterface />
+      <KeyboardShortcutsModal open={helpOpen} onClose={closeHelp} />
     </div>
   )
 }

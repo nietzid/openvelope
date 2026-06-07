@@ -12,6 +12,8 @@ interface MailboxState {
   page: number
   pageSize: number
   total: number
+  // Keyboard navigation
+  focusedIndex: number | null
   // Search state
   searchMode: boolean
   searchQuery: string
@@ -32,6 +34,7 @@ interface MailboxState {
   setPage: (page: number) => void
   setPageSize: (size: number) => void
   setTotal: (total: number) => void
+  setFocusedIndex: (index: number | null) => void
   setSearchMode: (mode: boolean) => void
   setSearchQuery: (query: string) => void
   setSearchResults: (results: MessageSummary[], total: number) => void
@@ -50,6 +53,7 @@ export const useMailboxStore = create<MailboxState>((set) => ({
   page: 0,
   pageSize: 50,
   total: 0,
+  focusedIndex: null,
   searchMode: false,
   searchQuery: '',
   searchResults: [],
@@ -65,6 +69,7 @@ export const useMailboxStore = create<MailboxState>((set) => ({
     currentMessageText: null,
     page: 0,
     total: 0,
+    focusedIndex: null,
     searchMode: false,
     searchQuery: '',
     searchResults: [],
@@ -97,6 +102,7 @@ export const useMailboxStore = create<MailboxState>((set) => ({
   setPage: (page) => set({ page }),
   setPageSize: (pageSize) => set({ pageSize, page: 0 }),
   setTotal: (total) => set({ total }),
+  setFocusedIndex: (index) => set({ focusedIndex: index }),
   setSearchMode: (mode) => set({ searchMode: mode }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSearchResults: (results, total) => set({ searchResults: results, searchTotal: total }),
