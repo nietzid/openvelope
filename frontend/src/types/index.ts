@@ -148,3 +148,22 @@ export interface Signature {
   created_at: string;
   updated_at: string;
 }
+
+export interface SmtpSettingsResponse {
+  id: number;
+  relay_host: string;
+  relay_port: number;
+  relay_username: string;
+  relay_password: string;
+  relay_auth: string;
+  enabled: boolean;
+}
+
+export interface SmtpSettingsRequest {
+  relay_host: string;
+  relay_port: number;
+  relay_username: string;
+  relay_password: string;
+  relay_auth: string;
+  enabled: boolean;
+}

@@ -9,10 +9,21 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	Database DatabaseConfig `yaml:"database"`
-	Auth     AuthConfig     `yaml:"auth"`
-	Session  SessionConfig  `yaml:"session"`
+	Server    ServerConfig    `yaml:"server"`
+	Database  DatabaseConfig  `yaml:"database"`
+	Auth      AuthConfig      `yaml:"auth"`
+	Session   SessionConfig   `yaml:"session"`
+	SMTPRelay SMTPRelayConfig `yaml:"smtp_relay"`
+}
+
+// SMTPRelayConfig defines a global SMTP relay that can be used instead of per-user IMAP credentials.
+type SMTPRelayConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	Auth     string `yaml:"auth"` // "plain", "login", "none"
 }
 
 type ServerConfig struct {
@@ -51,6 +62,11 @@ type SMTPConfig struct {
 	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
 	StartTLS bool   `yaml:"starttls"`
+	// Relay configuration (optional — when set, uses these credentials for SMTP instead of IMAP credentials)
+	RelayUsername string `yaml:"relay_username"`
+	RelayPassword string `yaml:"relay_password"`
+	RelayFrom     string `yaml:"relay_from"`
+	RelayAuth     string `yaml:"relay_auth"` // "plain", "login", or empty for auto
 }
 
 type SessionConfig struct {

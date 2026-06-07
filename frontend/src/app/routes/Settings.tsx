@@ -20,16 +20,18 @@ import type { Identity, Signature } from '../../types'
 
 // ─── Tab Configuration ──────────────────────────────────────────────
 
-type TabId = 'identities' | 'signatures' | 'notifications'
+type TabId = 'identities' | 'signatures' | 'notifications' | 'smtp'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'identities', label: 'Identities' },
   { id: 'signatures', label: 'Signatures' },
+  { id: 'smtp', label: 'SMTP Relay' },
   { id: 'notifications', label: 'Notifications' },
 ]
 
 // Lazy-load TipTap editor for code-splitting
 const TipTapEditor = lazy(() => import('../../components/TipTapEditor'))
+const SmtpSettingsPanel = lazy(() => import('../../components/settings/SmtpSettings'))
 
 /**
  * Editor loading fallback shown while TipTap chunk loads.
@@ -165,6 +167,11 @@ export default function Settings() {
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'identities' && <IdentitiesTab />}
         {activeTab === 'signatures' && <SignaturesTab />}
+        {activeTab === 'smtp' && (
+          <Suspense fallback={<EditorLoadingFallback />}>
+            <SmtpSettingsPanel />
+          </Suspense>
+        )}
         {activeTab === 'notifications' && <NotificationsTab />}
       </div>
     </div>

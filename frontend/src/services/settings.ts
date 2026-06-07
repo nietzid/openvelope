@@ -1,5 +1,5 @@
 import { api } from './api'
-import type { Identity, Signature } from '../types'
+import type { Identity, Signature, SmtpSettingsResponse, SmtpSettingsRequest } from '../types'
 
 // Identities
 export async function listIdentities() {
@@ -40,5 +40,17 @@ export async function updateSignature(id: number, signature: Partial<Signature>)
 
 export async function deleteSignature(id: number) {
   const { data } = await api.delete(`/signatures/${id}`)
+  return data
+}
+
+
+// SMTP Settings
+export async function getSmtpSettings(): Promise<SmtpSettingsResponse> {
+  const { data } = await api.get('/settings/smtp')
+  return data
+}
+
+export async function updateSmtpSettings(settings: SmtpSettingsRequest): Promise<SmtpSettingsResponse> {
+  const { data } = await api.put('/settings/smtp', settings)
   return data
 }

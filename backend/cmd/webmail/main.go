@@ -59,6 +59,7 @@ func main() {
 	contactsHandler := api.NewContactsHandler(db)
 	identitiesHandler := api.NewIdentitiesHandler(db)
 	idleHandler := api.NewIdleHandler(db, cfg, manager, hub)
+	smtpSettingsHandler := api.NewSmtpSettingsHandler(db, cfg)
 
 	app := fiber.New(fiber.Config{
 		AppName:      "Webmail",
@@ -77,7 +78,7 @@ func main() {
 		Format: "[${time}] ${status} ${method} ${path} (${latency})\n",
 	}))
 
-	api.RegisterRoutes(app, cfg, db, hub, manager, authHandler, folderHandler, messageHandler, composeHandler, searchHandler, contactsHandler, identitiesHandler, idleHandler)
+	api.RegisterRoutes(app, cfg, db, hub, manager, authHandler, folderHandler, messageHandler, composeHandler, searchHandler, contactsHandler, identitiesHandler, idleHandler, smtpSettingsHandler)
 
 	mimeTypes := map[string]string{
 		".html": "text/html; charset=utf-8",

@@ -17,6 +17,40 @@ type SMTPConfig struct {
 	Host     string
 	Port     int
 	StartTLS bool
+	// Relay configuration (optional)
+	RelayEnabled  bool
+	RelayUsername string
+	RelayPassword string
+	RelayFrom     string
+	RelayAuth     string // "plain", "login", "none", or empty for auto (plain)
+}
+
+// IsRelay returns true if relay is enabled and credentials are configured.
+func (c SMTPConfig) IsRelay() bool {
+	return c.RelayEnabled && c.RelayUsername != ""
+}
+
+// IsNoAuth returns true if the relay uses no authentication.
+func (c SMTPConfig) IsNoAuth() bool {
+	return c.RelayEnabled && strings.ToLower(c.RelayAuth) == "none"
+}
+
+// AuthCredentials returns the username and password to use for SMTP authentication.
+// If relay is configured, relay credentials are used; otherwise, the user's own credentials.
+func (c SMTPConfig) AuthCredentials(email, password string) (authUser, authPass string) {
+	if c.IsRelay() {
+		return c.RelayUsername, c.RelayPassword
+	}
+	return email, password
+}
+
+// SenderAddress returns the envelope sender (MAIL FROM) address.
+// If relay_from is configured, it is used; otherwise, the user's email is used.
+func (c SMTPConfig) SenderAddress(email string) string {
+	if c.RelayFrom != "" {
+		return c.RelayFrom
+	}
+	return email
 }
 
 func (c SMTPConfig) Address() string {
@@ -148,14 +182,20 @@ func Send(cfg SMTPConfig, email, password string, msg EmailMessage) error {
 		return fmt.Errorf("build message: %w", err)
 	}
 
-	auth := smtp.PlainAuth("", email, password, cfg.Host)
+	authUser, authPass := cfg.AuthCredentials(email, password)
+	sender := cfg.SenderAddress(email)
 	recipients := append(append(msg.To, msg.Cc...), msg.Bcc...)
 
 	if cfg.StartTLS {
-		return sendWithStartTLS(cfg, email, password, recipients, raw)
+		return sendWithStartTLS(cfg, authUser, authPass, sender, recipients, raw)
 	}
 
-	return smtp.SendMail(cfg.Address(), auth, msg.From, recipients, raw)
+	if cfg.IsNoAuth() {
+		return smtp.SendMail(cfg.Address(), nil, sender, recipients, raw)
+	}
+
+	auth := smtp.PlainAuth("", authUser, authPass, cfg.Host)
+	return smtp.SendMail(cfg.Address(), auth, sender, recipients, raw)
 }
 
 // SendWithAttachments sends an email with attachments via SMTP.
@@ -165,28 +205,47 @@ func SendWithAttachments(cfg SMTPConfig, email, password string, msg EmailMessag
 		return fmt.Errorf("build message: %w", err)
 	}
 
-	auth := smtp.PlainAuth("", email, password, cfg.Host)
+	authUser, authPass := cfg.AuthCredentials(email, password)
+	sender := cfg.SenderAddress(email)
 	recipients := append(append(msg.To, msg.Cc...), msg.Bcc...)
 
 	if cfg.StartTLS {
-		return sendWithStartTLS(cfg, email, password, recipients, raw)
+		return sendWithStartTLS(cfg, authUser, authPass, sender, recipients, raw)
 	}
 
-	return smtp.SendMail(cfg.Address(), auth, msg.From, recipients, raw)
+	if cfg.IsNoAuth() {
+		return smtp.SendMail(cfg.Address(), nil, sender, recipients, raw)
+	}
+
+	auth := smtp.PlainAuth("", authUser, authPass, cfg.Host)
+	return smtp.SendMail(cfg.Address(), auth, sender, recipients, raw)
 }
 
-func sendWithStartTLS(cfg SMTPConfig, email, password string, recipients []string, raw []byte) error {
+func sendWithStartTLS(cfg SMTPConfig, authUser, authPass, sender string, recipients []string, raw []byte) error {
 	c, err := gosmtp.DialStartTLS(cfg.Address(), &tls.Config{ServerName: cfg.Host})
 	if err != nil {
 		return fmt.Errorf("dial SMTP STARTTLS: %w", err)
 	}
 	defer c.Close()
 
-	if err := c.Auth(sasl.NewPlainClient("", email, password)); err != nil {
-		return fmt.Errorf("SMTP auth: %w", err)
+	// Skip auth if relay_auth is "none"
+	if !cfg.IsNoAuth() {
+		// Choose SASL mechanism based on relay_auth config
+		var saslClient sasl.Client
+		switch strings.ToLower(cfg.RelayAuth) {
+		case "login":
+			saslClient = sasl.NewLoginClient(authUser, authPass)
+		default:
+			// "plain" or empty — use PLAIN auth
+			saslClient = sasl.NewPlainClient("", authUser, authPass)
+		}
+
+		if err := c.Auth(saslClient); err != nil {
+			return fmt.Errorf("SMTP auth: %w", err)
+		}
 	}
 
-	if err := c.Mail(email, nil); err != nil {
+	if err := c.Mail(sender, nil); err != nil {
 		return fmt.Errorf("SMTP MAIL: %w", err)
 	}
 

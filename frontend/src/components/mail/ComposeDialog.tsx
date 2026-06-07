@@ -8,6 +8,7 @@ import { autocompleteContacts } from '../../services/contacts'
 import { getMessageHeaders } from '../../services/messages'
 import { formatSize } from '../../lib/format'
 import { easing, duration } from '../../lib/motion'
+import { useDraftAutoSave } from '../../hooks/useDraftAutoSave'
 import type { AttachmentUpload, ContactAutocompleteItem, Identity, Signature, MessageHeaders } from '../../types'
 
 // Lazy-load TipTap editor for code-splitting
@@ -89,6 +90,25 @@ interface AttachmentItem {
 }
 
 /**
+ * Formats a timestamp into a human-readable relative time string.
+ * e.g., "2 minutes ago", "1 hour ago", "yesterday"
+ */
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now()
+  const diffMs = now - timestamp
+  const diffSec = Math.floor(diffMs / 1000)
+  const diffMin = Math.floor(diffSec / 60)
+  const diffHr = Math.floor(diffMin / 60)
+  const diffDay = Math.floor(diffHr / 24)
+
+  if (diffSec < 60) return 'just now'
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`
+  if (diffDay === 1) return 'yesterday'
+  return `${diffDay} days ago`
+}
+
+/**
  * Editor loading fallback shown while TipTap chunk loads.
  */
 function EditorLoadingFallback() {
@@ -123,6 +143,9 @@ export function ComposeDialog() {
   const [sendError, setSendError] = useState<string | null>(null)
   const [attachError, setAttachError] = useState<string | null>(null)
   const [editorLoadError, setEditorLoadError] = useState(false)
+
+  // Draft auto-save
+  const { hasDraft, draftData, saveDraft, clearDraft, restoreDraft } = useDraftAutoSave(composeOpen, composeMode)
 
   // Identity state
   const [identities, setIdentities] = useState<Identity[]>([])
@@ -239,8 +262,9 @@ export function ComposeDialog() {
   // Reset state when dialog closes
   const handleClose = useCallback(() => {
     initializedRef.current = null
+    clearDraft()
     closeCompose()
-  }, [closeCompose])
+  }, [closeCompose, clearDraft])
 
   // Check if any attachment is currently uploading
   const isUploading = attachments.some((a) => a.uploading)
@@ -422,6 +446,14 @@ export function ComposeDialog() {
     }
   }, [])
 
+  // Auto-save draft on field changes (debounced via hook)
+  useEffect(() => {
+    if (!composeOpen) return
+    // Don't save if the draft banner is still showing (user hasn't decided yet)
+    if (hasDraft) return
+    saveDraft(to, subject, bodyHtml)
+  }, [composeOpen, to, subject, bodyHtml, saveDraft, hasDraft])
+
   // Send email
   const handleSend = useCallback(async () => {
     setSendError(null)
@@ -443,7 +475,7 @@ export function ComposeDialog() {
         attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
       })
 
-      // Success — close dialog
+      // Success — clear draft and close dialog
       handleClose()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to send email. Please try again.'
@@ -451,6 +483,21 @@ export function ComposeDialog() {
       setSending(false)
     }
   }, [to, subject, bodyHtml, attachments, handleClose])
+
+  // Restore draft — fills form fields with saved draft data
+  const handleRestoreDraft = useCallback(() => {
+    const data = restoreDraft()
+    if (data) {
+      setTo(data.to)
+      setSubject(data.subject)
+      setBodyHtml(data.body)
+    }
+  }, [restoreDraft])
+
+  // Discard draft — clear saved draft without restoring
+  const handleDiscardDraft = useCallback(() => {
+    clearDraft()
+  }, [clearDraft])
 
   // Determine dialog title
   const dialogTitle =
@@ -463,6 +510,29 @@ export function ComposeDialog() {
   return (
     <Dialog open={composeOpen} onClose={handleClose} title={dialogTitle} labelId="compose-dialog-title">
       <div className="flex flex-col gap-[var(--space-4)]">
+        {/* Draft restoration banner */}
+        {hasDraft && draftData && (
+          <div
+            className="flex items-center justify-between gap-[var(--space-3)] rounded-[var(--radius-md)] border border-[var(--color-warning)] bg-[var(--color-warning)]/10 px-[var(--space-4)] py-[var(--space-3)]"
+            role="alert"
+            style={{ transition: `opacity var(--duration-fast) ease, transform var(--duration-fast) ease` }}
+          >
+            <p className="text-sm text-[var(--color-text-primary)]">
+              You have an unsaved draft from{' '}
+              <span className="font-medium">{formatRelativeTime(draftData.savedAt)}</span>.
+              {' '}Restore it?
+            </p>
+            <div className="flex items-center gap-[var(--space-2)] shrink-0">
+              <Button variant="ghost" size="sm" onClick={handleDiscardDraft}>
+                Discard
+              </Button>
+              <Button variant="primary" size="sm" onClick={handleRestoreDraft}>
+                Restore
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* From dropdown (identity selector) */}
         {identities.length > 0 && (
           <div className="flex flex-col gap-[var(--space-1)]">

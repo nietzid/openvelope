@@ -126,9 +126,24 @@ func (h *ComposeHandler) Send(c fiber.Ctx) error {
 	}
 
 	smtpCfg := smtp.SMTPConfig{
-		Host:     h.cfg.Auth.SMTP.Host,
-		Port:     h.cfg.Auth.SMTP.Port,
-		StartTLS: h.cfg.Auth.SMTP.StartTLS,
+		Host:          h.cfg.Auth.SMTP.Host,
+		Port:          h.cfg.Auth.SMTP.Port,
+		StartTLS:      h.cfg.Auth.SMTP.StartTLS,
+		RelayEnabled:  h.cfg.Auth.SMTP.RelayUsername != "" || h.cfg.SMTPRelay.Enabled,
+		RelayUsername: h.cfg.Auth.SMTP.RelayUsername,
+		RelayPassword: h.cfg.Auth.SMTP.RelayPassword,
+		RelayFrom:     h.cfg.Auth.SMTP.RelayFrom,
+		RelayAuth:     h.cfg.Auth.SMTP.RelayAuth,
+	}
+
+	// If global SMTP relay is enabled and no per-SMTP-section relay is set, use global relay config
+	if h.cfg.SMTPRelay.Enabled && h.cfg.Auth.SMTP.RelayUsername == "" {
+		smtpCfg.Host = h.cfg.SMTPRelay.Host
+		smtpCfg.Port = h.cfg.SMTPRelay.Port
+		smtpCfg.RelayEnabled = true
+		smtpCfg.RelayUsername = h.cfg.SMTPRelay.Username
+		smtpCfg.RelayPassword = h.cfg.SMTPRelay.Password
+		smtpCfg.RelayAuth = h.cfg.SMTPRelay.Auth
 	}
 
 	msg := smtp.EmailMessage{

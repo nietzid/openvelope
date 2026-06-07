@@ -19,9 +19,24 @@ auth:
     host: mail.armsolusi.com
     port: 587
     starttls: true
+    # relay_username: ""
+    # relay_password: ""
+    # relay_from: ""
+    # relay_auth: "plain"
 
 session:
   jwt_secret: "change-me-in-production"
   access_token_ttl: "15m"
   refresh_token_ttl: "168h"
   encryption_key: "0123456789abcdef0123456789abcdef"
+
+# Global SMTP relay configuration (disabled by default).
+# When enabled, all outgoing mail is sent through this relay instead of using
+# the user's IMAP credentials for SMTP auth.
+smtp_relay:
+  enabled: false
+  host: ""
+  port: 587
+  username: ""
+  password: ""
+  auth: "plain" # "plain", "login", or "none"
