@@ -88,3 +88,17 @@ export async function downloadAttachment(folder: string, uid: number, partId: st
   })
   return response.data
 }
+
+// ── Folder CRUD ──────────────────────────────────────────────────────
+
+export async function createFolder(name: string): Promise<void> {
+  await api.post('/folders', { name })
+}
+
+export async function renameFolder(oldName: string, newName: string): Promise<void> {
+  await api.patch('/folders', { old_name: oldName, new_name: newName })
+}
+
+export async function deleteFolder(name: string): Promise<void> {
+  await api.delete(`/folders/${encodeURIComponent(name)}`)
+}
