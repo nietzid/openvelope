@@ -86,7 +86,9 @@ describe('handleNewMessage', () => {
     const newMsg = makeMessage({ uid: 20 })
     const result = handleNewMessage({ folder: 'Sent', message: newMsg })
 
-    expect(result).toBe(false)
+    // Returns true because the event is valid (notifications should still fire)
+    expect(result).toBe(true)
+    // Store is not modified
     expect(useMailboxStore.getState().messages).toHaveLength(1)
   })
 
@@ -263,7 +265,8 @@ describe('Property: WebSocket event store mutations', () => {
 
           const result = handleNewMessage({ folder: eventFolder, message: newMsg })
 
-          expect(result).toBe(false)
+          // Returns true because the event is valid (notifications should still fire)
+          expect(result).toBe(true)
           expect(useMailboxStore.getState().messages).toEqual(existing)
           expect(useMailboxStore.getState().total).toBe(existing.length)
         },

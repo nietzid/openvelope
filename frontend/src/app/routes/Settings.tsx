@@ -15,15 +15,17 @@ import {
 } from '../../services/settings'
 import { useAuthStore } from '../../stores/authStore'
 import { easing } from '../../lib/motion'
+import { useNotifications } from '../../hooks/useNotifications'
 import type { Identity, Signature } from '../../types'
 
 // ─── Tab Configuration ──────────────────────────────────────────────
 
-type TabId = 'identities' | 'signatures'
+type TabId = 'identities' | 'signatures' | 'notifications'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'identities', label: 'Identities' },
   { id: 'signatures', label: 'Signatures' },
+  { id: 'notifications', label: 'Notifications' },
 ]
 
 // Lazy-load TipTap editor for code-splitting
@@ -163,6 +165,7 @@ export default function Settings() {
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'identities' && <IdentitiesTab />}
         {activeTab === 'signatures' && <SignaturesTab />}
+        {activeTab === 'notifications' && <NotificationsTab />}
       </div>
     </div>
   )
@@ -838,6 +841,107 @@ function SignaturesTab() {
           </div>
         </div>
       </Dialog>
+    </div>
+  )
+}
+
+// ─── Notifications Tab ──────────────────────────────────────────────
+
+function NotificationsTab() {
+  const { enabled, setEnabled, permission, requestPermission } = useNotifications()
+
+  const permissionLabel =
+    permission === 'unsupported'
+      ? 'Not supported in this browser'
+      : permission === 'granted'
+        ? 'Granted'
+        : permission === 'denied'
+          ? 'Denied'
+          : 'Not yet requested'
+
+  const permissionColor =
+    permission === 'granted'
+      ? 'text-[var(--color-accent)]'
+      : permission === 'denied'
+        ? 'text-[var(--color-error)]'
+        : 'text-[var(--color-text-secondary)]'
+
+  return (
+    <div className="p-[var(--space-6)]">
+      {/* Header */}
+      <div className="mb-[var(--space-6)]">
+        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Notifications</h2>
+        <p className="text-sm text-[var(--color-text-secondary)] mt-0.5">
+          Configure how you are notified about new messages
+        </p>
+      </div>
+
+      {/* Notification settings */}
+      <div className="space-y-[var(--space-4)]">
+        {/* Enable/Disable notifications */}
+        <div className="flex items-center justify-between p-[var(--space-4)] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-[var(--color-text-primary)]">
+              New message notifications
+            </p>
+            <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
+              Show browser notifications or toast alerts when new messages arrive
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-label="Toggle new message notifications"
+            onClick={() => setEnabled(!enabled)}
+            className={[
+              'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+              'min-h-[44px] min-w-[44px] items-center justify-center',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2',
+            ].join(' ')}
+          >
+            <span className="sr-only">Toggle notifications</span>
+            <span
+              aria-hidden="true"
+              className={[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full shadow-sm ring-0 transition-transform duration-200',
+                enabled
+                  ? 'translate-x-6 bg-[var(--color-accent)]'
+                  : 'translate-x-0 bg-[var(--color-text-secondary)]',
+              ].join(' ')}
+            />
+          </button>
+        </div>
+
+        {/* Browser permission status */}
+        <div className="flex items-center justify-between p-[var(--space-4)] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-[var(--color-text-primary)]">
+              Browser notification permission
+            </p>
+            <p className="text-xs mt-0.5">
+              <span className={`font-medium ${permissionColor}`}>{permissionLabel}</span>
+            </p>
+            <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
+              Browser notifications appear when the tab is in the background
+            </p>
+          </div>
+          {permission === 'default' && (
+            <Button variant="secondary" size="sm" onClick={requestPermission}>
+              Allow
+            </Button>
+          )}
+        </div>
+
+        {/* Info box */}
+        <div className="p-[var(--space-4)] rounded-[var(--radius-md)] bg-[var(--color-surface)] border border-[var(--color-border)]">
+          <p className="text-xs text-[var(--color-text-secondary)]">
+            {enabled
+              ? 'When enabled, you will receive in-app toast notifications when the tab is visible, and browser notifications when it is in the background.'
+              : 'Notifications are currently disabled. You can re-enable them at any time.'}
+          </p>
+        </div>
+      </div>
     </div>
   )
 }

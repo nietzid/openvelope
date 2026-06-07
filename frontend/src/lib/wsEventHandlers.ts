@@ -1,5 +1,6 @@
 import type { MessageSummary, MessageFlags } from '../types'
 import { useMailboxStore } from '../stores/mailboxStore'
+import { notifyNewMessage } from '../hooks/useNotifications'
 
 // --- Event payload types ---
 
@@ -35,12 +36,24 @@ export function handleNewMessage(data: NewMessageEvent): boolean {
   if (!data || typeof data.folder !== 'string' || !data.message) return false
 
   const state = useMailboxStore.getState()
-  if (data.folder !== state.currentFolder) return false
 
-  useMailboxStore.setState({
-    messages: [data.message, ...state.messages],
-    total: state.total + 1,
+  // If folder matches, prepend to store
+  if (data.folder === state.currentFolder) {
+    useMailboxStore.setState({
+      messages: [data.message, ...state.messages],
+      total: state.total + 1,
+    })
+  }
+
+  // Notify via browser notification or Sonner toast
+  // (notifyNewMessage internally checks: notifications setting, same-folder skip, tab visibility)
+  notifyNewMessage({
+    folder: data.folder,
+    uid: data.message.uid,
+    from: data.message.from,
+    subject: data.message.subject,
   })
+
   return true
 }
 
