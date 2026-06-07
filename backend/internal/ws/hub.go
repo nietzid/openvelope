@@ -19,8 +19,15 @@ type Client struct {
 	Send  chan []byte
 }
 
+// IdleWatcherHandle is an interface satisfied by imap.IdleWatcher so that the
+// Hub can manage watcher lifecycle without importing the imap package directly.
+type IdleWatcherHandle interface {
+	Stop()
+}
+
 type Hub struct {
 	clients    map[string]map[*Client]bool
+	watchers   map[string]IdleWatcherHandle
 	Register   chan *Client
 	Unregister chan *Client
 	Broadcast  chan BroadcastMessage
@@ -35,10 +42,40 @@ type BroadcastMessage struct {
 func NewHub() *Hub {
 	return &Hub{
 		clients:    make(map[string]map[*Client]bool),
+		watchers:   make(map[string]IdleWatcherHandle),
 		Register:   make(chan *Client),
 		Unregister: make(chan *Client),
 		Broadcast:  make(chan BroadcastMessage),
 	}
+}
+
+// SetWatcher registers (or replaces) the active IDLE watcher for a user.
+// If a previous watcher exists it is stopped before replacement.
+func (h *Hub) SetWatcher(email string, w IdleWatcherHandle) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if prev, ok := h.watchers[email]; ok && prev != nil {
+		prev.Stop()
+	}
+	h.watchers[email] = w
+}
+
+// RemoveWatcher stops and removes the active IDLE watcher for a user.
+func (h *Hub) RemoveWatcher(email string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if w, ok := h.watchers[email]; ok && w != nil {
+		w.Stop()
+	}
+	delete(h.watchers, email)
+}
+
+// HasWatcher returns true if the user has an active IDLE watcher registered.
+func (h *Hub) HasWatcher(email string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	_, ok := h.watchers[email]
+	return ok
 }
 
 func (h *Hub) Run() {

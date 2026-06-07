@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterRoutes(app *fiber.App, cfg *config.Config, db *gorm.DB, hub *ws.Hub, manager *imap.Manager, auth *AuthHandler, folders *FolderHandler, messages *MessageHandler, compose *ComposeHandler, search *SearchHandler, contacts *ContactsHandler, identities *IdentitiesHandler) {
+func RegisterRoutes(app *fiber.App, cfg *config.Config, db *gorm.DB, hub *ws.Hub, manager *imap.Manager, auth *AuthHandler, folders *FolderHandler, messages *MessageHandler, compose *ComposeHandler, search *SearchHandler, contacts *ContactsHandler, identities *IdentitiesHandler, idle *IdleHandler) {
 	app.Get("/health", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
@@ -64,6 +64,9 @@ func RegisterRoutes(app *fiber.App, cfg *config.Config, db *gorm.DB, hub *ws.Hub
 	sigGroup.Post("/", identities.CreateSignature)
 	sigGroup.Patch("/:id", identities.UpdateSignature)
 	sigGroup.Delete("/:id", identities.DeleteSignature)
+
+	idleGroup := protected.Group("/idle")
+	idleGroup.Post("/switch", idle.Switch)
 
 	// WebSocket route (also auth-protected via middleware)
 	app.Get("/ws", middleware.AuthRequired(cfg.Session.JWTSecret), wsUpgrade(), ws.HandleWebSocket(hub, manager, db, cfg))

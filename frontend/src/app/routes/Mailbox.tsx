@@ -11,6 +11,7 @@ import { ConnectionStatus } from '../../components/layout/ConnectionStatus'
 import { useAuthStore } from '../../stores/authStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useMailboxUpdates } from '../../hooks/useMailboxUpdates'
+import { useIdleSwitch } from '../../hooks/useIdleSwitch'
 import { useKeyboardShortcuts, KeyboardShortcutsModal } from '../../hooks/useKeyboardShortcuts'
 
 /**
@@ -24,6 +25,9 @@ export default function Mailbox() {
   // WebSocket lifecycle — connect on auth, disconnect on logout
   const wsServiceRef = useWebSocket()
   useMailboxUpdates(wsServiceRef)
+
+  // Switch IDLE to the currently viewed folder
+  useIdleSwitch()
 
   // Redirect to login if token cleared (e.g. after logout)
   useEffect(() => {

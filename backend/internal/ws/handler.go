@@ -49,9 +49,8 @@ func HandleWebSocket(hub *Hub, manager *imap.Manager, db *gorm.DB, cfg *config.C
 			hub.Register <- client
 
 			// Start IMAP IDLE watcher for real-time mailbox updates
-			var watcher *imap.IdleWatcher
 			if manager != nil {
-				watcher = manager.StartIdle(email, password, func(event imap.IdleEvent) {
+				watcher := manager.StartIdle(email, password, "INBOX", func(event imap.IdleEvent) {
 					data, err := event.JSON()
 					if err != nil {
 						log.Printf("idle event marshal: %v", err)
@@ -62,12 +61,11 @@ func HandleWebSocket(hub *Hub, manager *imap.Manager, db *gorm.DB, cfg *config.C
 					default:
 					}
 				})
+				hub.SetWatcher(email, watcher)
 			}
 
 			defer func() {
-				if watcher != nil {
-					watcher.Stop()
-				}
+				hub.RemoveWatcher(email)
 				hub.Unregister <- client
 				conn.Close()
 			}()

@@ -115,10 +115,11 @@ func (m *Manager) CloseAll() {
 	}
 }
 
-// StartIdle starts an IMAP IDLE watcher for the given user using a dedicated
-// connection. The password is required to authenticate that connection.
-func (m *Manager) StartIdle(email, password string, onEvent func(event IdleEvent)) *IdleWatcher {
-	watcher := NewIdleWatcher(m, email, password, onEvent)
+// StartIdle starts an IMAP IDLE watcher for the given user on the specified
+// folder using a dedicated connection. The password is required to
+// authenticate that connection.
+func (m *Manager) StartIdle(email, password, folder string, onEvent func(event IdleEvent)) *IdleWatcher {
+	watcher := NewIdleWatcher(m, email, password, folder, onEvent)
 	watcher.Start()
 	return watcher
 }

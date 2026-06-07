@@ -4,7 +4,7 @@ import "testing"
 
 func TestNewIdleWatcher(t *testing.T) {
 	manager := NewManager(IMAPConfig{Host: "localhost", Port: 993, TLS: true})
-	watcher := NewIdleWatcher(manager, "test@example.com", "password", func(event IdleEvent) {})
+	watcher := NewIdleWatcher(manager, "test@example.com", "password", "INBOX", func(event IdleEvent) {})
 	if watcher == nil {
 		t.Fatal("NewIdleWatcher returned nil")
 	}
@@ -17,12 +17,15 @@ func TestNewIdleWatcher(t *testing.T) {
 	if watcher.password != "password" {
 		t.Errorf("watcher.password = %q, want %q", watcher.password, "password")
 	}
+	if watcher.folder != "INBOX" {
+		t.Errorf("watcher.folder = %q, want %q", watcher.folder, "INBOX")
+	}
 	watcher.Stop()
 }
 
 func TestIdleWatcherStop(t *testing.T) {
 	manager := NewManager(IMAPConfig{Host: "localhost", Port: 993, TLS: true})
-	watcher := NewIdleWatcher(manager, "test@example.com", "password", func(event IdleEvent) {})
+	watcher := NewIdleWatcher(manager, "test@example.com", "password", "INBOX", func(event IdleEvent) {})
 
 	// Stop should not panic
 	watcher.Stop()
@@ -33,7 +36,7 @@ func TestIdleWatcherStop(t *testing.T) {
 
 func TestManagerStartIdle(t *testing.T) {
 	manager := NewManager(IMAPConfig{Host: "localhost", Port: 993, TLS: true})
-	watcher := manager.StartIdle("test@example.com", "password", func(event IdleEvent) {})
+	watcher := manager.StartIdle("test@example.com", "password", "INBOX", func(event IdleEvent) {})
 	if watcher == nil {
 		t.Fatal("StartIdle returned nil")
 	}

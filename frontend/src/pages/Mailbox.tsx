@@ -10,6 +10,7 @@ import { useMailboxStore } from '../stores/mailboxStore'
 import { getMessageHeaders } from '../services/messages'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useMailboxUpdates } from '../hooks/useMailboxUpdates'
+import { useIdleSwitch } from '../hooks/useIdleSwitch'
 
 function Mailbox() {
   const navigate = useNavigate()
@@ -20,6 +21,7 @@ function Mailbox() {
 
   const wsServiceRef = useWebSocket()
   useMailboxUpdates(wsServiceRef)
+  useIdleSwitch()
 
   const handleLogout = async () => {
     try {

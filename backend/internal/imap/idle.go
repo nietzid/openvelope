@@ -30,6 +30,7 @@ type IdleWatcher struct {
 	manager     *Manager
 	email       string
 	password    string
+	folder      string
 	done        chan struct{}
 	stopped     bool
 	mu          sync.Mutex
@@ -37,13 +38,15 @@ type IdleWatcher struct {
 	reconnDelay time.Duration
 }
 
-// NewIdleWatcher creates a new IDLE watcher for the given user.
-// The password is required to authenticate the dedicated IDLE connection.
-func NewIdleWatcher(manager *Manager, email, password string, onEvent func(IdleEvent)) *IdleWatcher {
+// NewIdleWatcher creates a new IDLE watcher for the given user on the
+// specified folder. The password is required to authenticate the dedicated
+// IDLE connection.
+func NewIdleWatcher(manager *Manager, email, password, folder string, onEvent func(IdleEvent)) *IdleWatcher {
 	return &IdleWatcher{
 		manager:  manager,
 		email:    email,
 		password: password,
+		folder:   folder,
 		done:     make(chan struct{}),
 		onEvent:  onEvent,
 	}
@@ -93,9 +96,9 @@ func (w *IdleWatcher) run() {
 		// Reset backoff on successful connection
 		w.reconnDelay = 0
 
-		// Select INBOX on the IDLE connection (read-only)
-		if _, err := c.Select("INBOX", true); err != nil {
-			log.Printf("idle select INBOX failed for %s: %v", w.email, err)
+		// Select the target folder on the IDLE connection (read-only)
+		if _, err := c.Select(w.folder, true); err != nil {
+			log.Printf("idle select %s failed for %s: %v", w.folder, w.email, err)
 			c.Logout()
 			select {
 			case <-w.done:
@@ -152,7 +155,7 @@ func (w *IdleWatcher) doIdle(c *client.Client) {
 			Type: "mailbox_update",
 			Data: map[string]interface{}{
 				"email":  w.email,
-				"folder": "INBOX",
+				"folder": w.folder,
 			},
 		})
 	}
