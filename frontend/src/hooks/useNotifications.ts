@@ -104,7 +104,7 @@ export function notifyNewMessage(data: NewMessageData): void {
   const { currentFolder } = useMailboxStore.getState()
   if (data.folder === currentFolder) return
 
-  if (document.hidden) {
+  if (typeof document !== 'undefined' && document.hidden) {
     // Tab is in background — use browser notification
     showBrowserNotification(data)
   } else {
