@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMailboxStore } from '../stores/mailboxStore'
 import { useUIStore } from '../stores/uiStore'
 import { batchOperation, updateFlags } from '../services/messages'
+import { showUndoToast } from './useUndo'
+import type { MessageSummary } from '../types'
 
 // ─── Shortcut definitions ─────────────────────────────────────────────────────
 
@@ -164,7 +166,7 @@ export function KeyboardShortcutsModal({
  */
 export function useKeyboardShortcuts(
   searchInputRef?: React.RefObject<HTMLInputElement | null>,
-  displayMessages?: readonly { uid: number }[],
+  displayMessages?: readonly MessageSummary[],
 ) {
   const [helpOpen, setHelpOpen] = useState(false)
 
@@ -320,6 +322,9 @@ export function useKeyboardShortcuts(
               // Remove archived message from list and update focus
               setFocusedIndex(null)
               setSelectedUID(null)
+              showUndoToast('Moved to Archive', () => {
+                batchOperation('Archive', [uid], 'move', currentFolder).catch(() => {})
+              })
             })
             .catch(() => {})
           break
@@ -334,6 +339,9 @@ export function useKeyboardShortcuts(
             .then(() => {
               setFocusedIndex(null)
               setSelectedUID(null)
+              showUndoToast('Message deleted', () => {
+                batchOperation('Trash', [uid], 'move', 'INBOX').catch(() => {})
+              })
             })
             .catch(() => {})
           break
@@ -371,6 +379,16 @@ export function useKeyboardShortcuts(
           updateFlags(currentFolder, [uid], 'seen', newSeen)
             .then(() => {
               updateMessageFlags(uid, { seen: newSeen })
+              showUndoToast(
+                newSeen ? 'Marked as read' : 'Marked as unread',
+                () => {
+                  updateFlags(currentFolder, [uid], 'seen', !newSeen)
+                    .then(() => {
+                      updateMessageFlags(uid, { seen: !newSeen })
+                    })
+                    .catch(() => {})
+                }
+              )
             })
             .catch(() => {})
           break

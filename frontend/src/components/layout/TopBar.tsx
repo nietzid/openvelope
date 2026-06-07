@@ -5,6 +5,7 @@ import { useMailboxStore } from '../../stores/mailboxStore'
 import { useUIStore } from '../../stores/uiStore'
 import { logout } from '../../services/auth'
 import { batchOperation } from '../../services/messages'
+import { showUndoToast } from '../../hooks/useUndo'
 import { Button } from '../primitives/Button'
 
 /**
@@ -43,6 +44,10 @@ export function TopBar() {
     if (uids.length === 0) return
     await batchOperation(currentFolder, uids, 'mark_read')
     if (hasSelection) clearSelection()
+    const label = uids.length === 1 ? 'Message marked as read' : `${uids.length} messages marked as read`
+    showUndoToast(label, () => {
+      batchOperation(currentFolder, uids, 'mark_unread').catch(() => {})
+    })
   }, [currentFolder, selectedUIDs, selectedUID, hasSelection, clearSelection])
 
   const handleMarkUnread = useCallback(async () => {
@@ -50,6 +55,10 @@ export function TopBar() {
     if (uids.length === 0) return
     await batchOperation(currentFolder, uids, 'mark_unread')
     if (hasSelection) clearSelection()
+    const label = uids.length === 1 ? 'Message marked as unread' : `${uids.length} messages marked as unread`
+    showUndoToast(label, () => {
+      batchOperation(currentFolder, uids, 'mark_read').catch(() => {})
+    })
   }, [currentFolder, selectedUIDs, selectedUID, hasSelection, clearSelection])
 
   const handleDelete = useCallback(async () => {
@@ -57,6 +66,11 @@ export function TopBar() {
     if (uids.length === 0) return
     await batchOperation(currentFolder, uids, 'delete')
     if (hasSelection) clearSelection()
+    const label = uids.length === 1 ? 'Message deleted' : `${uids.length} messages deleted`
+    showUndoToast(label, () => {
+      // Restore: move deleted messages back to INBOX
+      batchOperation('Trash', uids, 'move', 'INBOX').catch(() => {})
+    })
   }, [currentFolder, selectedUIDs, selectedUID, hasSelection, clearSelection])
 
   const handleMove = useCallback(async () => {
@@ -64,6 +78,11 @@ export function TopBar() {
     if (uids.length === 0) return
     await batchOperation(currentFolder, uids, 'move', 'Archive')
     if (hasSelection) clearSelection()
+    const label = uids.length === 1 ? 'Moved to Archive' : `${uids.length} messages moved to Archive`
+    showUndoToast(label, () => {
+      // Undo: move back from Archive to the original folder
+      batchOperation('Archive', uids, 'move', currentFolder).catch(() => {})
+    })
   }, [currentFolder, selectedUIDs, selectedUID, hasSelection, clearSelection])
 
   const handleLogout = useCallback(async () => {

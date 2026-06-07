@@ -1,5 +1,6 @@
 import { useMailboxStore } from '../../stores/mailboxStore'
 import { batchOperation } from '../../services/messages'
+import { showUndoToast } from '../../hooks/useUndo'
 import { Button } from '../primitives/Button'
 
 /**
@@ -18,24 +19,40 @@ export function BatchToolbar() {
   const visible = count > 0
 
   const handleMarkRead = async () => {
-    await batchOperation(currentFolder, Array.from(selectedUIDs), 'mark_read')
+    const uids = Array.from(selectedUIDs)
+    await batchOperation(currentFolder, uids, 'mark_read')
     clearSelection()
+    showUndoToast(`${uids.length} messages marked as read`, () => {
+      batchOperation(currentFolder, uids, 'mark_unread').catch(() => {})
+    })
   }
 
   const handleMarkUnread = async () => {
-    await batchOperation(currentFolder, Array.from(selectedUIDs), 'mark_unread')
+    const uids = Array.from(selectedUIDs)
+    await batchOperation(currentFolder, uids, 'mark_unread')
     clearSelection()
+    showUndoToast(`${uids.length} messages marked as unread`, () => {
+      batchOperation(currentFolder, uids, 'mark_read').catch(() => {})
+    })
   }
 
   const handleDelete = async () => {
-    await batchOperation(currentFolder, Array.from(selectedUIDs), 'delete')
+    const uids = Array.from(selectedUIDs)
+    await batchOperation(currentFolder, uids, 'delete')
     clearSelection()
+    showUndoToast(`${uids.length} messages deleted`, () => {
+      batchOperation('Trash', uids, 'move', 'INBOX').catch(() => {})
+    })
   }
 
   const handleMove = async () => {
+    const uids = Array.from(selectedUIDs)
     // Move to Archive as a default batch move action
-    await batchOperation(currentFolder, Array.from(selectedUIDs), 'move', 'Archive')
+    await batchOperation(currentFolder, uids, 'move', 'Archive')
     clearSelection()
+    showUndoToast(`${uids.length} messages moved to Archive`, () => {
+      batchOperation('Archive', uids, 'move', currentFolder).catch(() => {})
+    })
   }
 
   return (
