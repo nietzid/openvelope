@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { Toaster } from '../components/ui/sonner'
 
 const Login = lazy(() => import('./routes/Login'))
 const Mailbox = lazy(() => import('./routes/Mailbox'))
@@ -28,6 +29,7 @@ function RouteFallback() {
 export default function App() {
   return (
     <BrowserRouter>
+      <Toaster />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<Navigate to="/mailbox" replace />} />
