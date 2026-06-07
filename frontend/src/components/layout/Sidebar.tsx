@@ -256,11 +256,9 @@ export function Sidebar() {
       }
     }
 
-    const sidebar = sidebarRef.current;
-    if (sidebar) {
-      sidebar.addEventListener("keydown", handleKeyDown);
-      return () => sidebar.removeEventListener("keydown", handleKeyDown);
-    }
+    // Global shortcut — works from anywhere in the app
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [editingMode, deletingFolder]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Close context menu on outside click / escape ─────────────────
@@ -857,7 +855,7 @@ function ContextMenuButton({
       role="menuitem"
       onClick={onClick}
       className={[
-        "flex w-full items-center gap-2 px-3 py-1.5 text-sm text-left",
+        "flex w-full items-center gap-2 px-3 py-3 text-sm text-left min-h-[44px]",
         "transition-[background-color] duration-[100ms] ease-out",
         "focus-visible:outline-none focus-visible:bg-[var(--color-surface)]",
         variant === "danger"
