@@ -9,7 +9,7 @@ export function Toaster(props: ToasterProps) {
         classNames: {
           toast: "group toast group-[.toaster]:bg-[var(--color-surface-elevated)] group-[.toaster]:text-[var(--color-text-primary)] group-[.toaster]:border-[var(--color-border)] group-[.toaster]:shadow-[var(--shadow-md)]",
           description: "group-[.toast]:text-[var(--color-text-secondary)]",
-          actionButton: "group-[.toast]:bg-[var(--color-accent)] group-[.toast]:text-white",
+          actionButton: "group-[.toast]:bg-[var(--color-accent)] group-[.toast]:text-[var(--color-bg)]",
           cancelButton: "group-[.toast]:bg-[var(--color-surface)] group-[.toast]:text-[var(--color-text-secondary)]",
         },
       }}
