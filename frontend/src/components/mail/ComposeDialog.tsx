@@ -5,9 +5,10 @@ import { useUIStore } from '../../stores/uiStore'
 import { sendEmail, uploadAttachment } from '../../services/compose'
 import { listIdentities, listSignatures } from '../../services/settings'
 import { autocompleteContacts } from '../../services/contacts'
+import { getMessageHeaders } from '../../services/messages'
 import { formatSize } from '../../lib/format'
 import { easing, duration } from '../../lib/motion'
-import type { AttachmentUpload, ContactAutocompleteItem, Identity, Signature } from '../../types'
+import type { AttachmentUpload, ContactAutocompleteItem, Identity, Signature, MessageHeaders } from '../../types'
 
 // Lazy-load TipTap editor for code-splitting
 const TipTapEditor = lazy(() => import('../TipTapEditor'))
@@ -29,17 +30,46 @@ function prefixSubject(prefix: string, subject: string): string {
 }
 
 /**
- * Builds the initial editor HTML content for reply mode.
+ * Formats a date string for reply attribution.
  */
-function buildReplyBody(originalBody: string): string {
-  return `<br/><blockquote style="border-left: 2px solid #ccc; padding-left: 12px; margin-left: 0; color: #666;">${originalBody}</blockquote>`
+function formatDateAttribution(dateStr: string): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return dateStr
+  return d.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/**
+ * Builds the initial editor HTML content for reply mode.
+ * Attribution: "On [date], [sender] wrote:" followed by blockquoted original body.
+ */
+function buildReplyBody(originalBody: string, from?: string, date?: string): string {
+  const sender = from || 'the sender'
+  const dateStr = date ? formatDateAttribution(date) : 'an earlier date'
+  const attribution = `<p>On ${dateStr}, ${sender} wrote:</p>`
+  return `<br/>${attribution}<blockquote data-reply-quote="true" contenteditable="false" style="border-left: 3px solid var(--color-border, #ccc); padding-left: 12px; margin: 8px 0 0 0; color: var(--color-text-secondary, #666);">${originalBody}</blockquote>`
 }
 
 /**
  * Builds the initial editor HTML content for forward mode.
+ * Includes a forwarded message header with From, Date, Subject, To fields.
  */
-function buildForwardBody(originalBody: string): string {
-  return `<br/><p>---------- Forwarded message ----------</p>${originalBody}`
+function buildForwardBody(originalBody: string, from?: string, date?: string, subject?: string, to?: string): string {
+  const dateStr = date ? formatDateAttribution(date) : ''
+  const header = [
+    '---------- Forwarded message ---------',
+    from ? `From: ${from}` : '',
+    dateStr ? `Date: ${dateStr}` : '',
+    subject ? `Subject: ${subject}` : '',
+    to ? `To: ${to}` : '',
+  ].filter(Boolean).join('<br/>')
+  return `<br/><div data-forward-header="true" contenteditable="false" style="color: var(--color-text-secondary, #666); font-size: 0.9em;">${header}</div><br/>${originalBody}`
 }
 
 interface AttachmentItem {
@@ -115,10 +145,12 @@ export function ComposeDialog() {
     if (composeMode === 'reply' && composeReplyTo) {
       setTo(composeReplyTo.to)
       setSubject(prefixSubject('Re: ', composeReplyTo.subject))
+      // Set initial body without headers; will be updated asynchronously
       setBodyHtml(buildReplyBody(composeReplyTo.body))
     } else if (composeMode === 'forward' && composeReplyTo) {
       setTo('')
       setSubject(prefixSubject('Fwd: ', composeReplyTo.subject))
+      // Set initial body without headers; will be updated asynchronously
       setBodyHtml(buildForwardBody(composeReplyTo.body))
     } else {
       setTo('')
@@ -132,6 +164,28 @@ export function ComposeDialog() {
     setAttachError(null)
     setEditorLoadError(false)
   }
+
+  // Fetch message headers asynchronously and rebuild body with attribution
+  useEffect(() => {
+    if (!composeOpen || !composeReplyTo || (composeMode !== 'reply' && composeMode !== 'forward')) return
+    const { uid, folder } = composeReplyTo
+    if (uid == null || !folder) return
+
+    let cancelled = false
+    getMessageHeaders(folder, uid)
+      .then((headers: MessageHeaders) => {
+        if (cancelled) return
+        if (composeMode === 'reply') {
+          setBodyHtml(buildReplyBody(composeReplyTo.body, headers.from, headers.date))
+        } else if (composeMode === 'forward') {
+          setBodyHtml(buildForwardBody(composeReplyTo.body, headers.from, headers.date, headers.subject, headers.to))
+        }
+      })
+      .catch(() => {
+        // Headers fetch failed; keep the fallback body without attribution
+      })
+    return () => { cancelled = true }
+  }, [composeOpen, composeMode, composeReplyTo])
 
   // Fetch identities and signatures when compose dialog opens
   useEffect(() => {

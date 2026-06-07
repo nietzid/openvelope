@@ -216,6 +216,8 @@ function MessageBody({ folder, uid, summary }: MessageBodyProps) {
       to: parsed.from,
       subject: parsed.subject,
       body: parsed.html || parsed.text,
+      uid,
+      folder,
     })
   }
 
@@ -225,6 +227,8 @@ function MessageBody({ folder, uid, summary }: MessageBodyProps) {
       to: '',
       subject: parsed.subject,
       body: parsed.html || parsed.text,
+      uid,
+      folder,
     })
   }
 

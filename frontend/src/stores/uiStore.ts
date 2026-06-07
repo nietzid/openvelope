@@ -5,6 +5,8 @@ interface ComposeReplyTo {
   to: string
   subject: string
   body: string
+  uid?: number
+  folder?: string
 }
 
 interface UIState {
