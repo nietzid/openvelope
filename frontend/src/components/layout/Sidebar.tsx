@@ -9,6 +9,7 @@ import {
   renameFolder,
   deleteFolder,
 } from "../../services/folders";
+import { toast } from "sonner";
 import { staggerDelay } from "../../lib/motion";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { Button } from "../primitives/Button";
@@ -300,6 +301,7 @@ export function Sidebar() {
     setEditingMode({ type: "create" });
     setEditValue("");
     setEditError(null);
+    setDeletingFolder(null);
     setContextMenu(null);
   }, []);
 
@@ -307,10 +309,13 @@ export function Sidebar() {
     setEditingMode({ type: "rename", folderName });
     setEditValue(folderName);
     setEditError(null);
+    setDeletingFolder(null);
     setContextMenu(null);
   }, []);
 
   const openDeleteConfirm = useCallback((folderName: string) => {
+    setEditingMode(null);
+    setEditError(null);
     setDeletingFolder(folderName);
     setContextMenu(null);
   }, []);
@@ -365,7 +370,7 @@ export function Sidebar() {
       setDeletingFolder(null);
       await refreshFolders(setFolders);
     } catch (err: unknown) {
-      // Close the dialog even on error – the folder may not exist
+      toast.error("Failed to delete folder");
       setDeletingFolder(null);
     } finally {
       setIsOperating(false);
