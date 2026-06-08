@@ -9,3 +9,4 @@ backend/webmail
 
 # OS
 .DS_Store
+node_modules

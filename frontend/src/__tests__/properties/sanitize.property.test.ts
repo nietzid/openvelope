@@ -31,7 +31,7 @@ const arbMaliciousHtml = fc.oneof(
     (text) => `<a href="javascript:alert(1)">${text}</a>`,
   ),
   fc.string({ minLength: 1, maxLength: 30 }).map(
-    (text) => `<img src="data:text/html,<script>alert(1)</script>">`,
+    () => `<img src="data:text/html,<script>alert(1)</script>">`,
   ),
   // Strings with iframe/object/embed
   fc.string().map(

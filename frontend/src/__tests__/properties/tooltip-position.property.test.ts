@@ -19,25 +19,6 @@ beforeEach(() => {
   Object.defineProperty(window, 'scrollY', { value: 0, writable: true })
 })
 
-/** Generate a valid trigger DOMRect within viewport bounds */
-const triggerRectArb = (viewportWidth: number, viewportHeight: number) =>
-  fc.record({
-    x: fc.integer({ min: 0, max: Math.max(0, viewportWidth - 10) }),
-    y: fc.integer({ min: 0, max: Math.max(0, viewportHeight - 10) }),
-    width: fc.integer({ min: 10, max: 100 }),
-    height: fc.integer({ min: 10, max: 100 }),
-  }).map(({ x, y, width, height }) => ({
-    x,
-    y,
-    width,
-    height,
-    top: y,
-    left: x,
-    right: x + width,
-    bottom: y + height,
-    toJSON: () => ({}),
-  } as DOMRect))
-
 /** Generate tooltip dimensions */
 const tooltipSizeArb = fc.record({
   width: fc.integer({ min: 20, max: 200 }),

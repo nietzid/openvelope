@@ -14,16 +14,12 @@ import { duration } from '../../lib/motion'
 // All duration tokens are interactive (used for UI responses)
 const interactiveDurations = Object.entries(duration) as [string, number][]
 
-// Decorative durations would be modal/dialog entrance, etc. — currently
-// all exported duration tokens are interactive (fast, normal, slow, slower)
-const decorativeDurationValues: number[] = []
-
 describe('Property 4: Interactive duration bounds', () => {
   it('all duration tokens are ≤ 350ms (interactive bound)', () => {
     fc.assert(
       fc.property(
         fc.constantFrom(...interactiveDurations),
-        ([name, value]) => {
+        ([, value]) => {
           expect(value).toBeLessThanOrEqual(350)
         }
       ),

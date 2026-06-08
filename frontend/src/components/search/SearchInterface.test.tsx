@@ -47,6 +47,10 @@ async function triggerSearch(input: HTMLInputElement, query: string, debounceMs 
   vi.useRealTimers()
 }
 
+function getSearchInput(): HTMLInputElement {
+  return screen.getByPlaceholderText('Search messages…') as HTMLInputElement
+}
+
 describe('SearchInterface', () => {
   describe('visibility', () => {
     it('does not render when searchOpen is false', () => {
@@ -83,7 +87,7 @@ describe('SearchInterface', () => {
     it('updates query on input change', async () => {
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
       vi.useFakeTimers()
       fireEvent.change(input, { target: { value: 'hello' } })
       expect((input as HTMLInputElement).value).toBe('hello')
@@ -104,7 +108,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
 
       await triggerSearch(input, 'a', 400)
       expect(mockedSearch).not.toHaveBeenCalled()
@@ -117,7 +121,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
 
       await triggerSearch(input, 'hel')
 
@@ -134,7 +138,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
 
       vi.useFakeTimers()
       fireEvent.change(input, { target: { value: 'he' } })
@@ -165,7 +169,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
       await triggerSearch(input, 'no match')
 
       await waitFor(() => {
@@ -180,7 +184,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
       await triggerSearch(input, 'loading test')
 
       await waitFor(() => {
@@ -195,7 +199,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
       await triggerSearch(input, 'error test')
 
       await waitFor(() => {
@@ -221,7 +225,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
       await triggerSearch(input, 'test query')
 
       await waitFor(() => {
@@ -247,7 +251,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
       await triggerSearch(input, 'hello')
 
       await waitFor(() => {
@@ -272,7 +276,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
       await triggerSearch(input, 'unread')
 
       await waitFor(() => {
@@ -303,7 +307,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
       await triggerSearch(input, 'nav test')
 
       await waitFor(() => {
@@ -338,7 +342,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
       await triggerSearch(input, 'wrap test')
 
       await waitFor(() => {
@@ -375,7 +379,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
       await triggerSearch(input, 'click test')
 
       await waitFor(() => {
@@ -413,7 +417,7 @@ describe('SearchInterface', () => {
 
       render(<SearchInterface />)
       await openSearch()
-      const input = screen.getByPlaceholderText('Search messages…')
+      const input = getSearchInput()
       await triggerSearch(input, 'retry query')
 
       await waitFor(() => {

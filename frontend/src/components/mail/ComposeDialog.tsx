@@ -160,10 +160,6 @@ export function ComposeDialog() {
   // Identity state
   const [identities, setIdentities] = useState<Identity[]>([])
   const [selectedIdentityId, setSelectedIdentityId] = useState<number | null>(null)
-  const [identitiesLoading, setIdentitiesLoading] = useState(false)
-
-  // Signature state
-  const [signatures, setSignatures] = useState<Signature[]>([])
 
   // Contact autocomplete state
   const [autocompleteResults, setAutocompleteResults] = useState<ContactAutocompleteItem[]>([])
@@ -234,7 +230,6 @@ export function ComposeDialog() {
   useEffect(() => {
     if (!composeOpen) return
     let cancelled = false
-    setIdentitiesLoading(true)
     Promise.all([
       listIdentities().catch(() => []),
       listSignatures().catch(() => []),
@@ -246,8 +241,6 @@ export function ComposeDialog() {
       setSelectedIdentityId(defaultIdentity?.id ?? list[0]?.id ?? null)
 
       const sigList = Array.isArray(signatureData) ? signatureData : []
-      setSignatures(sigList)
-
       // For new messages, append default signature if available
       if (composeMode === 'new' && defaultIdentity?.signature_id) {
         const defaultSig = sigList.find((s: Signature) => s.id === defaultIdentity.signature_id && s.content)
@@ -262,10 +255,7 @@ export function ComposeDialog() {
       if (!cancelled) {
         setIdentities([])
         setSelectedIdentityId(null)
-        setSignatures([])
       }
-    }).finally(() => {
-      if (!cancelled) setIdentitiesLoading(false)
     })
     return () => { cancelled = true }
   }, [composeOpen, composeMode])

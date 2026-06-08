@@ -12,7 +12,7 @@ import { useUIStore } from '../stores/uiStore'
 // Mock WebSocket
 class MockWebSocket {
   static instances: MockWebSocket[] = []
-  readyState = WebSocket.CONNECTING
+  readyState: number = WebSocket.CONNECTING
   url: string
   onopen: (() => void) | null = null
   onclose: (() => void) | null = null
@@ -79,7 +79,6 @@ describe('WebSocketService', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     MockWebSocket.instances = []
-    // @ts-expect-error - mock WebSocket global
     globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
     // Reset store state
     useUIStore.setState({ wsStatus: 'disconnected', wsRetryCount: 0 })

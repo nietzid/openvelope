@@ -4,7 +4,7 @@ import type { MessageSummary } from '../../types'
 export interface MessageRowProps {
   message: MessageSummary
   isSelected: boolean
-  isFocused: boolean
+  isFocused?: boolean
   isBatchSelected: boolean
   onSelect: (uid: number) => void
   onBatchToggle: (uid: number) => void
@@ -67,7 +67,7 @@ function truncatePreview(text: string, maxLength: number = 120): string {
 export function MessageRow({
   message,
   isSelected,
-  isFocused,
+  isFocused = false,
   isBatchSelected,
   onSelect,
   onBatchToggle,

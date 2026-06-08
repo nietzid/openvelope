@@ -28,11 +28,9 @@ const localStorageAvailableArb = fc.boolean()
 
 describe('Property 2: Theme resolution correctness', () => {
   let originalMatchMedia: typeof window.matchMedia
-  let originalLocalStorage: Storage
 
   beforeEach(() => {
     originalMatchMedia = window.matchMedia
-    originalLocalStorage = window.localStorage
   })
 
   afterEach(() => {

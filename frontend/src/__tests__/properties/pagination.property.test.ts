@@ -25,7 +25,7 @@ describe('Property 11: Pagination control disabled states', () => {
       fc.property(
         fc.constantFrom(25, 50, 100, 200),
         fc.nat({ max: 10000 }),
-        (pageSize, total) => {
+        () => {
           expect(isPrevDisabled(0)).toBe(true)
         },
       ),

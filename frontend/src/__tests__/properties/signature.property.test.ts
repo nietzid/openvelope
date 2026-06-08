@@ -135,7 +135,7 @@ describe('Property: Signature content preservation', () => {
   describe('Empty signature handling', () => {
     it('empty signature content is not appended', () => {
       fc.assert(
-        fc.property(arbComposeMode, (mode) => {
+        fc.property(arbComposeMode, () => {
           const result = appendDefaultSignature('', '', true)
           expect(result).toBe('')
         }),
@@ -213,7 +213,6 @@ describe('Property: Signature content preservation', () => {
       fc.assert(
         fc.property(arbHtmlSignature, (signature) => {
           const replyBody = '<br/><blockquote>Original message</blockquote>'
-          const result = appendDefaultSignature(replyBody, signature, true)
           // Since replyBody contains text, appendDefaultSignature checks includes()
           // It may or may not append depending on whether body already contains signature
           // But the body itself is not empty, so simulateCompose wouldn't append

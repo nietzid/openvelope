@@ -118,7 +118,6 @@ describe('Property 1: Token structure completeness and theme parity', () => {
 
     // Dark theme should override color and shadow tokens (those that change between themes)
     // The dark keys should be a subset of light keys (dark overrides light values)
-    const darkKeySet = new Set(darkKeys)
     const lightKeySet = new Set(lightKeys)
 
     // Every dark key must exist in light

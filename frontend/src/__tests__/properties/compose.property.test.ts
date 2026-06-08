@@ -50,7 +50,7 @@ describe('Property 14: Compose reply/forward pre-fill', () => {
   describe('Reply mode', () => {
     it('recipient is set to original sender', () => {
       fc.assert(
-        fc.property(arbEmail, arbSubject, arbBody, (sender, subject, body) => {
+        fc.property(arbEmail, (sender) => {
           // In reply mode, recipient = original sender
           const recipient = sender
           expect(recipient).toBe(sender)
@@ -101,7 +101,7 @@ describe('Property 14: Compose reply/forward pre-fill', () => {
   describe('Forward mode', () => {
     it('recipient is empty in forward mode', () => {
       fc.assert(
-        fc.property(arbEmail, arbSubject, arbBody, (sender, subject, body) => {
+        fc.property(arbEmail, arbSubject, arbBody, () => {
           // In forward mode, recipient = empty
           const recipient = ''
           expect(recipient).toBe('')
