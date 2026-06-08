@@ -77,7 +77,7 @@ export const useUIStore = create<UIState>()(
         })),
     }),
     {
-      name: 'webmail-ui',
+      name: 'openvelope-ui',
       partialize: (state) => ({ sidebarCompact: state.sidebarCompact }),
     },
   ),

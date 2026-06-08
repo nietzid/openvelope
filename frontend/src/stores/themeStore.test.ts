@@ -106,10 +106,10 @@ describe('themeStore', () => {
   })
 
   describe('persistence', () => {
-    it('persists mode to localStorage under webmail-theme key', () => {
+    it('persists mode to localStorage under openvelope-theme key', () => {
       useThemeStore.getState().setMode('dark')
 
-      const stored = JSON.parse(localStorage.getItem('webmail-theme') || '{}')
+      const stored = JSON.parse(localStorage.getItem('openvelope-theme') || '{}')
       expect(stored.state.mode).toBe('dark')
     })
   })

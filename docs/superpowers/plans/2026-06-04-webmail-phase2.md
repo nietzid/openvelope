@@ -274,7 +274,7 @@ Phase 2 has two parts:
 
 **Files:**
 - Create: `backend/internal/static/embed.go`
-- Modify: `backend/cmd/webmail/main.go`
+- Modify: `backend/cmd/openvelope/main.go`
 
 **Changes:**
 1. Create `embed.go`:
@@ -293,7 +293,7 @@ Phase 2 has two parts:
 3. Update the build script to:
    ```bash
    cd frontend && npm run build
-   cd ../backend && go build -o webmail ./cmd/webmail
+   cd ../backend && go build -o openvelope ./cmd/openvelope
    ```
 
 **Verify:** Build the binary, run it, open `http://localhost:8080` — should serve the React app.

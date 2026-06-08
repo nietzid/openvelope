@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/arfiansyah/webmail/internal/imap"
-	"github.com/arfiansyah/webmail/internal/models"
+	"github.com/arfiansyah/openvelope/internal/imap"
+	"github.com/arfiansyah/openvelope/internal/models"
 	"gorm.io/gorm"
 )
 

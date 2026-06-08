@@ -1,4 +1,4 @@
-module github.com/arfiansyah/webmail
+module github.com/arfiansyah/openvelope
 
 go 1.26.3
 

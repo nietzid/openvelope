@@ -34,7 +34,7 @@ export const useThemeStore = create<ThemeState>()(
       },
     }),
     {
-      name: 'webmail-theme',
+      name: 'openvelope-theme',
       onRehydrateStorage: () => (state) => {
         if (state) {
           const resolved = resolve(state.mode)

@@ -4,9 +4,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/arfiansyah/webmail/internal/auth"
-	"github.com/arfiansyah/webmail/internal/config"
-	"github.com/arfiansyah/webmail/internal/models"
+	"github.com/arfiansyah/openvelope/internal/auth"
+	"github.com/arfiansyah/openvelope/internal/config"
+	"github.com/arfiansyah/openvelope/internal/models"
 	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 )

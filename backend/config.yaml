@@ -5,9 +5,9 @@ server:
 database:
   host: localhost
   port: 5432
-  user: webmail
-  password: webmail
-  dbname: webmail
+  user: openvelope
+  password: openvelope
+  dbname: openvelope
   sslmode: disable
 
 auth:

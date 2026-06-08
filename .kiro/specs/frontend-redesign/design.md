@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document defines the technical architecture for a complete frontend redesign of the webmail application. The redesign delivers a premium, polished experience inspired by Linear, Superhuman, and Arc Browser while preserving the existing backend API contracts (REST + WebSocket).
+This document defines the technical architecture for a complete frontend redesign of the Openvelope application. The redesign delivers a premium, polished experience inspired by Linear, Superhuman, and Arc Browser while preserving the existing backend API contracts (REST + WebSocket).
 
 The design follows Emil Kowalski's design engineering philosophy: unseen details compound into interfaces people love. Every motion decision, token value, and interaction response time is intentional. The motion personality is **Premium** — elegant, minimal, sophisticated — using longer durations (350–600ms for modals), signature easing `cubic-bezier(0.16, 1, 0.3, 1)` (ease-out-expo), and zero overshoot.
 
@@ -317,7 +317,7 @@ export const useThemeStore = create<ThemeState>()(
       },
     }),
     {
-      name: 'webmail-theme',
+      name: 'openvelope-theme',
       onRehydrateStorage: () => (state) => {
         if (state) {
           const resolved = resolve(state.mode)

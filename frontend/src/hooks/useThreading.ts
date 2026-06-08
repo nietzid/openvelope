@@ -25,7 +25,7 @@ export const useThreadingStore = create<ThreadingState>()(
         })),
     }),
     {
-      name: 'webmail-threading',
+      name: 'openvelope-threading',
       partialize: (state) => ({ viewMode: state.viewMode }),
     },
   ),

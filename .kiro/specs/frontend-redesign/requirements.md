@@ -2,11 +2,11 @@
 
 ## Introduction
 
-Complete redesign and rewrite of the webmail frontend application to deliver a modern, premium user experience inspired by Linear, Superhuman, and Arc Browser. The redesign preserves the existing backend API contracts and tech stack (React, Vite, Tailwind CSS, Zustand, TipTap) while introducing Emil Kowalski's design engineering philosophy, sophisticated motion design, dark/light theming, responsive layouts, and WCAG 2.1 AA accessibility compliance.
+Complete redesign and rewrite of the Openvelope frontend application to deliver a modern, premium user experience inspired by Linear, Superhuman, and Arc Browser. The redesign preserves the existing backend API contracts and tech stack (React, Vite, Tailwind CSS, Zustand, TipTap) while introducing Emil Kowalski's design engineering philosophy, sophisticated motion design, dark/light theming, responsive layouts, and WCAG 2.1 AA accessibility compliance.
 
 ## Glossary
 
-- **Application**: The webmail frontend React application
+- **Application**: The Openvelope frontend React application
 - **Design_System**: The shared set of design tokens, CSS custom properties, utility classes, and reusable primitives that define the visual language
 - **Theme_Engine**: The subsystem responsible for managing dark/light color scheme switching and persisting user preference
 - **Motion_System**: The animation layer providing consistent, performant transitions across the Application using CSS transitions, custom easing curves, and stagger patterns
@@ -207,7 +207,7 @@ Complete redesign and rewrite of the webmail frontend application to deliver a m
 
 ### Requirement 14: Accessibility
 
-**User Story:** As a user with accessibility needs, I want the application to be fully navigable via keyboard and compatible with screen readers, so that I can use the webmail effectively.
+**User Story:** As a user with accessibility needs, I want the application to be fully navigable via keyboard and compatible with screen readers, so that I can use Openvelope effectively.
 
 #### Acceptance Criteria
 

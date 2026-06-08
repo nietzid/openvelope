@@ -281,7 +281,7 @@ describe('ComposeDialog', () => {
       fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
       fireEvent.click(screen.getByRole('button', { name: /save draft/i }))
 
-      const draft = JSON.parse(localStorage.getItem('webmail-draft') ?? '{}')
+      const draft = JSON.parse(localStorage.getItem('openvelope-draft') ?? '{}')
       expect(draft.to).toBe('test@example.com')
       expect(draft.subject).toBe('Draft subject')
       expect(draft.body).toBe('<p>Draft body</p>')
@@ -289,7 +289,7 @@ describe('ComposeDialog', () => {
     })
 
     it('clears draft when choosing Discard from Cancel prompt', () => {
-      localStorage.setItem('webmail-draft', JSON.stringify({
+      localStorage.setItem('openvelope-draft', JSON.stringify({
         to: 'old@example.com',
         subject: 'Old draft',
         body: '<p>Old body</p>',
@@ -303,7 +303,7 @@ describe('ComposeDialog', () => {
       fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
       fireEvent.click(within(screen.getByRole('alertdialog', { name: /save draft before closing/i })).getByRole('button', { name: /discard/i }))
 
-      expect(localStorage.getItem('webmail-draft')).toBeNull()
+      expect(localStorage.getItem('openvelope-draft')).toBeNull()
       expect(useUIStore.getState().composeOpen).toBe(false)
     })
 
@@ -318,7 +318,7 @@ describe('ComposeDialog', () => {
         expect(useUIStore.getState().composeOpen).toBe(false)
       })
 
-      const draft = JSON.parse(localStorage.getItem('webmail-draft') ?? '{}')
+      const draft = JSON.parse(localStorage.getItem('openvelope-draft') ?? '{}')
       expect(draft.subject).toBe('Dismissed draft')
     })
   })

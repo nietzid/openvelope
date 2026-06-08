@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-const STORAGE_KEY = 'webmail-draft'
+const STORAGE_KEY = 'openvelope-draft'
 const DEBOUNCE_MS = 2000
 
 export interface DraftData {
@@ -65,7 +65,7 @@ function removeDraft(): void {
  * Hook that provides draft auto-save functionality for the compose dialog.
  *
  * - Debounces saves by 2 seconds after the last edit.
- * - Persists to localStorage under the `webmail-draft` key.
+ * - Persists to localStorage under the `openvelope-draft` key.
  * - On mount, checks for an existing draft and exposes it for restore.
  */
 export function useDraftAutoSave(composeOpen: boolean, mode: 'new' | 'reply' | 'forward' | null) {

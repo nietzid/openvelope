@@ -11,20 +11,24 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/arfiansyah/webmail/internal/api"
-	"github.com/arfiansyah/webmail/internal/cache"
-	"github.com/arfiansyah/webmail/internal/config"
-	"github.com/arfiansyah/webmail/internal/imap"
-	"github.com/arfiansyah/webmail/internal/models"
-	"github.com/arfiansyah/webmail/internal/web"
-	"github.com/arfiansyah/webmail/internal/ws"
+	"github.com/arfiansyah/openvelope/internal/api"
+	"github.com/arfiansyah/openvelope/internal/cache"
+	"github.com/arfiansyah/openvelope/internal/config"
+	"github.com/arfiansyah/openvelope/internal/imap"
+	"github.com/arfiansyah/openvelope/internal/models"
+	"github.com/arfiansyah/openvelope/internal/web"
+	"github.com/arfiansyah/openvelope/internal/ws"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 )
 
 func main() {
-	configPath := flag.String("config", "config.yaml", "path to config file")
+	defaultConfigPath := os.Getenv("OPENVELOPE_CONFIG")
+	if defaultConfigPath == "" {
+		defaultConfigPath = "config.yaml"
+	}
+	configPath := flag.String("config", defaultConfigPath, "path to config file")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
@@ -63,7 +67,7 @@ func main() {
 	smtpSettingsHandler := api.NewSmtpSettingsHandler(db, cfg)
 
 	app := fiber.New(fiber.Config{
-		AppName:      "Webmail",
+		AppName:      "Openvelope",
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	})

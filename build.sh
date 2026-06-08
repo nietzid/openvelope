@@ -20,8 +20,8 @@ cp -R "$FRONTEND_DIR/dist/." "$WEB_DIST_DIR/"
 echo "Building backend..."
 (
   cd "$BACKEND_DIR"
-  go build -o webmail ./cmd/webmail
-  mv webmail "$ROOT_DIR"
+  go build -o openvelope ./cmd/openvelope
+  mv openvelope "$ROOT_DIR"
 )
 
-echo "Build complete: $ROOT_DIR/webmail"
+echo "Build complete: $ROOT_DIR/openvelope"

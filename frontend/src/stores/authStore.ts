@@ -17,7 +17,7 @@ export const useAuthStore = create<AuthState>()(
       clearAuth: () => set({ accessToken: null, email: null }),
     }),
     {
-      name: 'webmail-auth',
+      name: 'openvelope-auth',
     },
   ),
 )

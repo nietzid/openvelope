@@ -1,5 +1,5 @@
 # Binaries
-backend/webmail
+backend/openvelope
 *.exe
 
 # IDE
@@ -10,3 +10,5 @@ backend/webmail
 # OS
 .DS_Store
 node_modules
+/openvelope
+backend/internal/web/dist

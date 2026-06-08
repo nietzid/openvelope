@@ -5,7 +5,7 @@ import (
 	"net/mail"
 	"strconv"
 
-	"github.com/arfiansyah/webmail/internal/models"
+	"github.com/arfiansyah/openvelope/internal/models"
 	"github.com/gofiber/fiber/v3"
 	"github.com/microcosm-cc/bluemonday"
 	"gorm.io/gorm"

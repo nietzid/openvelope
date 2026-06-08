@@ -3,7 +3,7 @@ package middleware
 import (
 	"strings"
 
-	"github.com/arfiansyah/webmail/internal/auth"
+	"github.com/arfiansyah/openvelope/internal/auth"
 	"github.com/gofiber/fiber/v3"
 )
 

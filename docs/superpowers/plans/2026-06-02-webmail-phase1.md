@@ -1,4 +1,4 @@
-# Webmail Phase 1 — Core Email MVP Implementation Plan
+# Openvelope Phase 1 — Core Email MVP Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -18,7 +18,7 @@
 
 ```
 backend/
-├── cmd/webmail/main.go                    # Entry point
+├── cmd/openvelope/main.go                    # Entry point
 ├── internal/
 │   ├── config/config.go                   # YAML config loading
 │   ├── config/config_test.go
@@ -168,14 +168,14 @@ The plan contains 24 tasks organized into backend (Tasks 1-16) and frontend (Tas
 
 **Files:**
 - Create: `backend/go.mod`
-- Create: `backend/cmd/webmail/main.go`
+- Create: `backend/cmd/openvelope/main.go`
 - Create: `backend/config.yaml`
 
 - [ ] **Step 1: Initialize Go module**
 
 ```bash
 cd backend
-go mod init github.com/arfiansyah/webmail
+go mod init github.com/arfiansyah/openvelope
 ```
 
 - [ ] **Step 2: Install dependencies**
@@ -195,7 +195,7 @@ go get github.com/google/uuid
 
 - [ ] **Step 3: Create minimal Fiber server**
 
-Create `backend/cmd/webmail/main.go`:
+Create `backend/cmd/openvelope/main.go`:
 
 ```go
 package main
@@ -208,7 +208,7 @@ import (
 
 func main() {
 	app := fiber.New(fiber.Config{
-		AppName: "Webmail",
+		AppName: "Openvelope",
 	})
 
 	app.Get("/health", func(c fiber.Ctx) error {
@@ -231,9 +231,10 @@ server:
 database:
   host: localhost
   port: 5432
-  user: webmail
-  password: webmail
-  dbname: webmail
+  user: openvelope
+  password: openvelope
+  dbname: openvelope
+
   sslmode: disable
 
 auth:
@@ -256,7 +257,7 @@ session:
 - [ ] **Step 5: Verify server starts**
 
 ```bash
-go run ./cmd/webmail
+go run ./cmd/openvelope
 ```
 
 Expected: Server starts on :8080. `curl http://localhost:8080/health` returns `{"status":"ok"}`.
@@ -1039,7 +1040,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/arfiansyah/webmail/internal/auth"
+	"github.com/arfiansyah/openvelope/internal/auth"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -1129,7 +1130,7 @@ package middleware
 import (
 	"strings"
 
-	"github.com/arfiansyah/webmail/internal/auth"
+	"github.com/arfiansyah/openvelope/internal/auth"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -2094,30 +2095,30 @@ For each task: create the handler file with the structs and methods shown in the
 
 ```bash
 cd frontend && npm run build
-cd ../backend && go build -o webmail ./cmd/webmail
-./webmail --config config.yaml
+cd ../backend && go build -o openvelope ./cmd/openvelope
+./openvelope --config config.yaml
 ```
 
 ### Docker
 
 ```yaml
 services:
-  webmail:
-    image: webmail:latest
+  openvelope:
+    image: openvelope:latest
     ports:
       - "8080:8080"
     volumes:
-      - ./config.yaml:/etc/webmail/config.yaml
+      - ./config.yaml:/etc/openvelope/config.yaml
     environment:
-      - DATABASE_URL=postgres://user:pass@db:5432/webmail
+      - DATABASE_URL=postgres://user:pass@db:5432/openvelope
     depends_on:
       - db
 
   db:
     image: postgres:16
     environment:
-      POSTGRES_DB: webmail
-      POSTGRES_USER: webmail
+      POSTGRES_DB: openvelope
+      POSTGRES_USER: openvelope
       POSTGRES_PASSWORD: secret
     volumes:
       - pgdata:/var/lib/postgresql/data

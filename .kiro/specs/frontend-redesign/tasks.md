@@ -2,7 +2,7 @@
 
 ## Overview
 
-Incremental implementation of the webmail frontend redesign following a foundation-up build order: design tokens and infrastructure first, then primitives, layout, feature components, real-time enhancements, performance optimizations, accessibility polish, and property-based tests. Each task builds on completed prior tasks to avoid orphaned code.
+Incremental implementation of the Openvelope frontend redesign following a foundation-up build order: design tokens and infrastructure first, then primitives, layout, feature components, real-time enhancements, performance optimizations, accessibility polish, and property-based tests. Each task builds on completed prior tasks to avoid orphaned code.
 
 ## Tasks
 

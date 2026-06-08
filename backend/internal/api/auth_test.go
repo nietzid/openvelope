@@ -3,8 +3,8 @@ package api
 import (
 	"testing"
 
-	"github.com/arfiansyah/webmail/internal/config"
-	"github.com/arfiansyah/webmail/internal/imap"
+	"github.com/arfiansyah/openvelope/internal/config"
+	"github.com/arfiansyah/openvelope/internal/imap"
 )
 
 func newTestHandler() *AuthHandler {

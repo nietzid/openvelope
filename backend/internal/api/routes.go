@@ -1,10 +1,10 @@
 package api
 
 import (
-	"github.com/arfiansyah/webmail/internal/config"
-	"github.com/arfiansyah/webmail/internal/imap"
-	"github.com/arfiansyah/webmail/internal/middleware"
-	"github.com/arfiansyah/webmail/internal/ws"
+	"github.com/arfiansyah/openvelope/internal/config"
+	"github.com/arfiansyah/openvelope/internal/imap"
+	"github.com/arfiansyah/openvelope/internal/middleware"
+	"github.com/arfiansyah/openvelope/internal/ws"
 	"github.com/gofiber/contrib/v3/websocket"
 	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"

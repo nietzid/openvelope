@@ -166,7 +166,7 @@ export default function Login() {
               Welcome back
             </h1>
             <p className="mt-2 text-sm text-text-secondary">
-              Sign in to your Webmail account.
+              Sign in to your Openvelope account.
             </p>
 
             <form
@@ -257,7 +257,7 @@ export default function Login() {
         {/* Footer */}
         <footer className="flex items-center justify-between gap-4 border-t border-border px-6 py-5 md:px-10">
           <p className="text-xs text-text-secondary">
-            © 2024 Webmail Systems. All rights reserved.
+            © 2024 Openvelope. All rights reserved.
           </p>
           <div className="flex gap-4 text-xs font-medium text-text-primary">
             <a href="#" className="hover:underline">

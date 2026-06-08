@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/arfiansyah/webmail/internal/models"
+	"github.com/arfiansyah/openvelope/internal/models"
 	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 )
