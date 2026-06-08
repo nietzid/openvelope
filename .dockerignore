@@ -1,0 +1,16 @@
+.git
+.DS_Store
+.env
+*.log
+
+frontend/node_modules
+frontend/dist
+frontend/.vite
+
+backend/openvelope
+backend/webmail
+openvelope
+webmail
+
+node_modules
+dist

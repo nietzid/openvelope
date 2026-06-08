@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -239,7 +240,7 @@ func AppendMessage(conn *UserConnection, folder string, raw []byte, flags []stri
 }
 
 // ListMessages fetches a page of message summaries from the given folder.
-// UIDs are sorted in descending order (newest first).
+// Messages are sorted by date descending (newest first) before pagination.
 func ListMessages(conn *UserConnection, folder string, page, pageSize int) ([]MessageSummary, int, error) {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
@@ -260,10 +261,11 @@ func ListMessages(conn *UserConnection, folder string, page, pageSize int) ([]Me
 		return []MessageSummary{}, 0, nil
 	}
 
-	// Sort descending (newest first)
-	for i, j := 0, len(uids)-1; i < j; i, j = i+1, j-1 {
-		uids[i], uids[j] = uids[j], uids[i]
+	summaries, err := fetchMessageSummaries(conn, uids)
+	if err != nil {
+		return nil, 0, err
 	}
+	sortMessageSummariesNewestFirst(summaries)
 
 	// Paginate
 	start := page * pageSize
@@ -274,12 +276,13 @@ func ListMessages(conn *UserConnection, folder string, page, pageSize int) ([]Me
 	if end > total {
 		end = total
 	}
-	pageUIDs := uids[start:end]
+	return summaries[start:end], total, nil
+}
 
-	// Build seqset for the page
-	pageSeq := new(goimap.SeqSet)
-	for _, uid := range pageUIDs {
-		pageSeq.AddNum(uid)
+func fetchMessageSummaries(conn *UserConnection, uids []uint32) ([]MessageSummary, error) {
+	seq := new(goimap.SeqSet)
+	for _, uid := range uids {
+		seq.AddNum(uid)
 	}
 
 	// Fetch headers for threading (References, In-Reply-To)
@@ -297,7 +300,7 @@ func ListMessages(conn *UserConnection, folder string, page, pageSize int) ([]Me
 	ch := make(chan *goimap.Message, 10)
 	done := make(chan error, 1)
 	go func() {
-		done <- conn.Client.UidFetch(pageSeq, items, ch)
+		done <- conn.Client.UidFetch(seq, items, ch)
 	}()
 
 	var summaries []MessageSummary
@@ -332,10 +335,21 @@ func ListMessages(conn *UserConnection, folder string, page, pageSize int) ([]Me
 	}
 
 	if err := <-done; err != nil {
-		return nil, 0, fmt.Errorf("fetch messages: %w", err)
+		return nil, fmt.Errorf("fetch messages: %w", err)
 	}
 
-	return summaries, total, nil
+	return summaries, nil
+}
+
+func sortMessageSummariesNewestFirst(summaries []MessageSummary) {
+	sort.SliceStable(summaries, func(i, j int) bool {
+		left := summaries[i]
+		right := summaries[j]
+		if !left.Date.Equal(right.Date) {
+			return left.Date.After(right.Date)
+		}
+		return left.UID > right.UID
+	})
 }
 
 // GetMessage fetches the full RFC822 body of a message by UID.
@@ -887,68 +901,11 @@ func SearchMessages(conn *UserConnection, folder string, query SearchQuery) ([]M
 		return []MessageSummary{}, nil
 	}
 
-	// Sort descending
-	for i, j := 0, len(uids)-1; i < j; i, j = i+1, j-1 {
-		uids[i], uids[j] = uids[j], uids[i]
+	summaries, err := fetchMessageSummaries(conn, uids)
+	if err != nil {
+		return nil, err
 	}
-
-	seq := new(goimap.SeqSet)
-	for _, uid := range uids {
-		seq.AddNum(uid)
-	}
-
-	// Fetch headers for threading (References, In-Reply-To)
-	searchThreadSection := headerFieldsSection("References", "In-Reply-To")
-
-	items := []goimap.FetchItem{
-		goimap.FetchUid,
-		goimap.FetchEnvelope,
-		goimap.FetchFlags,
-		goimap.FetchRFC822Size,
-		goimap.FetchInternalDate,
-		searchThreadSection.FetchItem(),
-	}
-
-	ch := make(chan *goimap.Message, 10)
-	done := make(chan error, 1)
-	go func() {
-		done <- conn.Client.UidFetch(seq, items, ch)
-	}()
-
-	var summaries []MessageSummary
-	for msg := range ch {
-		s := MessageSummary{
-			UID:  msg.Uid,
-			Size: msg.Size,
-		}
-		if msg.Envelope != nil {
-			if msg.Envelope.From != nil && len(msg.Envelope.From) > 0 {
-				s.From = formatAddress(msg.Envelope.From[0])
-			}
-			if msg.Envelope.To != nil && len(msg.Envelope.To) > 0 {
-				s.To = formatAddresses(msg.Envelope.To)
-			}
-			s.Subject = msg.Envelope.Subject
-			s.Date = msg.Envelope.Date
-		}
-		if msg.Flags != nil {
-			s.Flags = ParseMessageFlags(msg.Flags)
-		}
-		if !msg.InternalDate.IsZero() {
-			s.Date = msg.InternalDate
-		}
-		// Extract thread_id from References or In-Reply-To headers
-		if literal := msg.GetBody(searchThreadSection); literal != nil {
-			if data, err := io.ReadAll(literal); err == nil {
-				s.ThreadID = extractThreadID(string(data))
-			}
-		}
-		summaries = append(summaries, s)
-	}
-
-	if err := <-done; err != nil {
-		return nil, fmt.Errorf("fetch: %w", err)
-	}
+	sortMessageSummariesNewestFirst(summaries)
 
 	return summaries, nil
 }

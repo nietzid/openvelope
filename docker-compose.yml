@@ -1,0 +1,36 @@
+services:
+  openvelope:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yaml:/etc/openvelope/config.yaml
+    environment:
+      - OPENVELOPE_CONFIG=/etc/openvelope/config.yaml
+      - DATABASE_URL=postgres://openvelope:openvelope@db:5432/openvelope?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: openvelope
+      POSTGRES_USER: openvelope
+      POSTGRES_PASSWORD: openvelope
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openvelope"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:

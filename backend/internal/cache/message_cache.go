@@ -89,7 +89,7 @@ func (mc *MessageCache) GetCachedMessages(email, folder string, page, pageSize i
 
 	var messages []models.CachedMessage
 	if err := mc.db.Where("email = ? AND folder = ?", email, folder).
-		Order("date DESC").
+		Order("date DESC, uid DESC").
 		Offset(page * pageSize).
 		Limit(pageSize).
 		Find(&messages).Error; err != nil {
@@ -219,7 +219,7 @@ func (mc *MessageCache) SearchCached(email, folder, text, from, to string, dateA
 	}
 
 	var messages []models.CachedMessage
-	if err := query.Order("date DESC").
+	if err := query.Order("date DESC, uid DESC").
 		Offset(page * pageSize).
 		Limit(pageSize).
 		Find(&messages).Error; err != nil {

@@ -2,6 +2,7 @@ package imap
 
 import (
 	"testing"
+	"time"
 
 	goimap "github.com/emersion/go-imap"
 )
@@ -49,6 +50,29 @@ func TestHeaderFieldsSectionFetchItem(t *testing.T) {
 	want := goimap.FetchItem("BODY.PEEK[HEADER.FIELDS (References In-Reply-To)]")
 	if got != want {
 		t.Fatalf("headerFieldsSection fetch item = %q, want %q", got, want)
+	}
+}
+
+func TestSortMessageSummariesNewestFirst(t *testing.T) {
+	oldest := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
+	newest := time.Date(2026, 1, 3, 9, 0, 0, 0, time.UTC)
+	middle := time.Date(2026, 1, 2, 9, 0, 0, 0, time.UTC)
+
+	messages := []MessageSummary{
+		{UID: 10, Date: oldest},
+		{UID: 20, Date: newest},
+		{UID: 30, Date: middle},
+		{UID: 40, Date: newest},
+	}
+
+	sortMessageSummariesNewestFirst(messages)
+
+	got := []uint32{messages[0].UID, messages[1].UID, messages[2].UID, messages[3].UID}
+	want := []uint32{40, 20, 30, 10}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("sorted UIDs = %v, want %v", got, want)
+		}
 	}
 }
 
