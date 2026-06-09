@@ -12,11 +12,11 @@ database:
 
 auth:
   imap:
-    host: mail.armsolusi.com
+    host: mail.google.com
     port: 993
     tls: true
   smtp:
-    host: mail.armsolusi.com
+    host: mail.google.com
     port: 587
     starttls: true
     # relay_username: ""
