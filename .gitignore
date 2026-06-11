@@ -12,3 +12,4 @@ backend/openvelope
 node_modules
 /openvelope
 backend/internal/web/dist
+docs/superpowers
